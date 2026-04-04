@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@import 'tailwindcss';
+@import '../../vendor/livewire/flux/dist/flux.css';
+
+@source '../views';
+@source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
+@source '../../vendor/livewire/flux/stubs/**/*.blade.php';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --color-lando-primary-50: #eff6ff;
+    --color-lando-primary-100: #dbeafe;
+    --color-lando-primary-200: #bfdbfe;
+    --color-lando-primary-300: #93c5fd;
+    --color-lando-primary-400: #60a5fa;
+    --color-lando-primary-500: #3b82f6;
+    --color-lando-primary-600: #2563eb;
+    --color-lando-primary-700: #1d4ed8;
+    --color-lando-primary-800: #1e40af;
+    --color-lando-primary-900: #1e3a8a;
+    --color-lando-primary-950: #172554;
+
+    --color-lando-accent-50: #fef3c7;
+    --color-lando-accent-100: #fde68a;
+    --color-lando-accent-200: #fcd34d;
+    --color-lando-accent-300: #fbbf24;
+    --color-lando-accent-400: #f59e0b;
+    --color-lando-accent-500: #d97706;
+    --color-lando-accent-600: #b45309;
+    --color-lando-accent-700: #92400e;
+    --color-lando-accent-800: #78350f;
+    --color-lando-accent-900: #451a03;
+
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+#terminal-output {
+    scrollbar-width: thin;
+    scrollbar-color: #4a5568 #1a202c;
+}
+
+#terminal-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+#terminal-output::-webkit-scrollbar-track {
+    background: #1a202c;
+}
+
+#terminal-output::-webkit-scrollbar-thumb {
+    background: #4a5568;
+    border-radius: 4px;
+}
+
+#terminal-output::-webkit-scrollbar-thumb:hover {
+    background: #718096;
+}
+
+.terminal-line {
+    display: block;
+    line-height: 1.4;
+}
+
+.terminal-line:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+/*
+ * SVG-as-<img>: border-radius is often ignored in WebKit/Electron; clip-path matches Flux button rounded-lg.
+ */
+.app-logo-frame {
+    @apply relative shrink-0 overflow-hidden rounded-lg size-[50px];
+}
+
+.app-logo-img {
+    @apply block size-full object-contain;
+    clip-path: inset(0 round 0.5rem);
+}

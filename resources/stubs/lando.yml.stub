@@ -1,0 +1,51 @@
+name: {{SITE_NAME}}
+recipe: wordpress
+config:
+  webroot: wp
+  php: "{{PHP_VERSION}}"
+  via: apache
+  database: mariadb:{{DB_VERSION}}
+
+services:
+  appserver:
+    build_as_root:
+      - apt-get update -y && apt-get install -y vim openssh-client curl sshpass
+      - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+      - apt-get install -y nodejs
+      - npm install -g yarn
+
+  database:
+    portforward: 32787
+
+  cache:
+    type: redis:{{REDIS_VERSION}}
+    portforward: true
+    ssl: false
+
+tooling:
+  composer:
+    service: appserver
+    description: Run Composer commands
+    cmd: composer
+  wp:
+    service: appserver
+    description: Run WP-CLI commands
+    cmd: wp
+  node:
+    service: appserver
+    description: Run Node commands
+    cmd: node
+  yarn:
+    service: appserver
+    description: Run Yarn commands
+    cmd: yarn
+  dev:
+    service: appserver
+    description: Run Yarn in development mode
+    user: root
+    cmd: bash -c "cd /app/wp/wp-content/themes/{{SITE_NAME}} && yarn dev"
+  build:
+    service: appserver
+    description: Run Yarn to build assets
+    user: root
+    cmd: bash -c "cd /app/wp/wp-content/themes/{{SITE_NAME}} && yarn build"

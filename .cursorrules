@@ -1,0 +1,41 @@
+# LandoDEV — Cursor rules
+
+## Project summary
+
+LandoDEV is a **Laravel 12** + **Livewire 3** + **Livewire Flux** application packaged as a **NativePHP Electron** desktop app. It orchestrates **Lando**-based local **WordPress** environments: create/clone sites, manage containers, edit `.lando.yml` via generators, stream terminal output in the UI, and persist per-machine defaults (PHP/MariaDB/Redis, code paths).
+
+Host PHP (NativePHP/Electron) is separate from **Lando container** PHP — version lists live in `config/lando_dev/defaults.php` and Settings.
+
+## Conventions
+
+- Prefer **focused diffs**: change only what the task requires; match existing naming, imports, and Livewire patterns.
+- Use **`route(..., [], false)`** for same-origin / `127.0.0.1` navigation in Electron to avoid `APP_URL` mismatches with `wire:navigate`.
+- **Destroy site**: async Lando destroy + filesystem delete, poll log until idle (same heuristics as other Lando actions), then delete DB row and **full-page** redirect to create — never delete the `Site` before the route can still resolve during Livewire polls.
+- **Terminal output**: `App\Support\AnsiToHtml` renders Lando ANSI colors in Blade; keep escaping safe (`lineToHtml`).
+- **Vite** dev server port **5175** (`vite.config.js`) — do not bind **5173** (Electron uses it).
+- **Sessions**: may use database driver; ensure migrations exist if enabling.
+
+## Key paths
+
+- `app/Livewire/` — page components (`SiteDashboard`, `NewSite`, `CloneSite`, `Settings`, etc.)
+- `app/Livewire/Concerns/WithCommandExecution.php` — multi-step Lando sequences + polling
+- `app/Services/LandoService.php`, `SiteManager.php`, `LandoYamlGenerator.php`
+- `resources/views/flux/brand.blade.php` — published Flux brand (logo sizing, `.app-logo-frame` / `.app-logo-img` in CSS)
+- `resources/css/app.css` — Tailwind + Flux; terminal + logo clip-path helpers
+- `scripts/native-dev.sh`, `scripts/native-php.sh` — Native dev entrypoints
+
+## Commands
+
+- `composer run native:dev` — NativePHP serve + Vite (see `scripts/native-dev.sh`)
+- `composer run dev` — classic Laravel `serve` + queue + pail + Vite (see `composer.json`)
+- `npm run dev` / `npm run build` — Vite
+- `php artisan test`, `./vendor/bin/pint`
+
+## Testing
+
+PHPUnit feature/unit tests under `tests/`. Use `RefreshDatabase` where DB is required.
+
+## Do not
+
+- Commit `.env`, `vendor/`, `node_modules/`, `public/build/`, or local `storage/landodev_defaults.json` (gitignored).
+- Broad refactors or unrelated file churn in a single change unless requested.
