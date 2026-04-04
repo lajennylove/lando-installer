@@ -15,7 +15,7 @@ services:
       - npm install -g yarn
 
   database:
-    portforward: 32787
+    portforward: {{DB_PORT}}
 
   cache:
     type: redis:{{REDIS_VERSION}}

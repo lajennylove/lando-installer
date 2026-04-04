@@ -8,6 +8,7 @@ use App\Enums\SiteStatus;
 use App\Models\CommandLog;
 use App\Models\Site;
 use App\Services\PlatformDetector;
+use App\Support\CommandLogErrorDetector;
 use Native\Laravel\Facades\ChildProcess;
 
 trait WithCommandExecution
@@ -133,10 +134,10 @@ trait WithCommandExecution
         // healthchecks, "Continuing in 10 seconds..." warnings).
         $lastModified = filemtime($logFile);
         if ((time() - $lastModified) > 30) {
-            $hasError = $this->detectErrors($content);
+            $hasError = CommandLogErrorDetector::indicatesFailure($content);
 
             if ($hasError) {
-                $this->failCurrentStep($site, $this->tailLines($content, 5));
+                $this->failCurrentStep($site, $this->tailLines($content, 50));
 
                 return;
             }
@@ -191,33 +192,6 @@ trait WithCommandExecution
 
         $stepDefinitions = $this->getStepDefinitions();
         $this->executeNextStep($stepDefinitions, $site);
-    }
-
-    private function detectErrors(string $content): bool
-    {
-        $lastLines = $this->tailLines($content, 5);
-
-        // Lando-specific fatal patterns (not warnings)
-        $fatalPatterns = [
-            'lando command not found',
-            'Error response from daemon',
-            'Cannot connect to the Docker daemon',
-            'is not running',
-            'EACCES: permission denied',
-        ];
-
-        foreach ($fatalPatterns as $pattern) {
-            if (stripos($lastLines, $pattern) !== false) {
-                return true;
-            }
-        }
-
-        // Check for non-zero exit code marker if present
-        if (preg_match('/exited with code (\d+)/', $lastLines, $matches)) {
-            return (int) $matches[1] !== 0;
-        }
-
-        return false;
     }
 
     private function tailLines(string $content, int $lines): string

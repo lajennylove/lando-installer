@@ -56,6 +56,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Source repository (About page). Static HTTPS form of git origin:
+    | git@github.com:lajennylove/lando-installer.git
+    |--------------------------------------------------------------------------
+    */
+
+    'repository_url' => env('APP_REPOSITORY_URL', 'https://github.com/lajennylove/lando-installer'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Author (About page)
+    |--------------------------------------------------------------------------
+    */
+
+    'author' => [
+        'name' => env('APP_AUTHOR_NAME', 'Jenny Martinez'),
+        'github_url' => env('APP_AUTHOR_GITHUB_URL', 'https://github.com/lajennylove'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

@@ -11,6 +11,7 @@ class SiteList extends Component
     #[On('site-created')]
     #[On('site-deleted')]
     #[On('site-status-changed')]
+    #[On('application-data-reset')]
     public function refresh(): void
     {
         // Livewire will re-render automatically

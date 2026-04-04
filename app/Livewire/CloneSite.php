@@ -11,9 +11,11 @@ use App\Services\PlatformDetector;
 use App\Services\SiteManager;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Title('LandoDEV')]
 class CloneSite extends Component
 {
     use WithCommandExecution;
@@ -83,7 +85,7 @@ class CloneSite extends Component
         $this->siteId = $site->id;
         $this->showProgress = true;
 
-        $this->dispatch('site-created');
+        $this->dispatch('site-created')->to(SiteList::class);
 
         $steps = $manager->getCloneSiteSteps($site, $remoteSite);
         $this->executeStepSequence($steps, $site);
@@ -115,7 +117,7 @@ class CloneSite extends Component
     {
         $site->update(['status' => SiteStatus::Running]);
         $this->notifySuccess("Site '{$site->name}' cloned successfully!");
-        $this->dispatch('site-created');
+        $this->dispatch('site-created')->to(SiteList::class);
     }
 
     public function render()

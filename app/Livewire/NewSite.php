@@ -10,9 +10,11 @@ use App\Services\PlatformDetector;
 use App\Services\SiteManager;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Title('LandoDEV')]
 class NewSite extends Component
 {
     use WithCommandExecution;
@@ -27,6 +29,8 @@ class NewSite extends Component
     public string $adminEmail = '';
 
     public string $path = '';
+
+    public bool $installSage = true;
 
     public bool $showProgress = false;
 
@@ -63,14 +67,15 @@ class NewSite extends Component
         }
 
         $manager = app(SiteManager::class);
-        $site = $manager->createNewSite($slug, $this->adminUsername, $this->adminPassword, $this->adminEmail, $this->path);
+        $site = $manager->createNewSite($slug, $this->adminUsername, $this->adminPassword, $this->adminEmail, $this->path, $this->installSage);
 
         $this->siteId = $site->id;
         $this->showProgress = true;
 
-        $this->dispatch('site-created');
+        $this->dispatch('site-created')->to(SiteList::class);
 
-        $steps = $manager->getNewSiteSteps($site, $this->adminPassword);
+        $steps = $manager->getNewSiteSteps($site, $this->adminPassword, $this->installSage);
+        $this->cachedSteps = $steps;
         $this->executeStepSequence($steps, $site);
     }
 
@@ -83,7 +88,7 @@ class NewSite extends Component
     {
         if ($this->cachedSteps === null) {
             $site = $this->getSite();
-            $this->cachedSteps = $site ? app(SiteManager::class)->getNewSiteSteps($site, $this->adminPassword) : [];
+            $this->cachedSteps = $site ? app(SiteManager::class)->getNewSiteSteps($site, $this->adminPassword, $this->installSage) : [];
         }
 
         return $this->cachedSteps;
@@ -93,7 +98,7 @@ class NewSite extends Component
     {
         $site->update(['status' => SiteStatus::Running]);
         $this->notifySuccess("Site '{$site->name}' created successfully!");
-        $this->dispatch('site-created');
+        $this->dispatch('site-created')->to(SiteList::class);
     }
 
     public function render()

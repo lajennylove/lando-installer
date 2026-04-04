@@ -10,10 +10,12 @@ use App\Services\LandoYamlGenerator;
 use App\Services\PlatformDetector;
 use App\Services\SiteManager;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 use Native\Laravel\Facades\ChildProcess;
 
 #[Layout('components.layouts.app')]
+#[Title('LandoDEV')]
 class SiteDashboard extends Component
 {
     use WithNotifications;
@@ -56,7 +58,39 @@ class SiteDashboard extends Component
         $this->site = $site;
         $this->activeTheme = $site->theme_name ?? '';
         $this->checkRealStatus();
-        $this->loadAvailableThemes();
+        if (! $this->isProjectMissingOnDisk()) {
+            $this->loadAvailableThemes();
+        }
+    }
+
+    public function isProjectMissingOnDisk(): bool
+    {
+        $path = $this->site->path;
+
+        return $path === '' || ! is_dir($path);
+    }
+
+    /**
+     * Drop the DB row when the project directory is gone (e.g. folder deleted outside the app).
+     */
+    public function removeOrphanFromApp(): void
+    {
+        if (! $this->isProjectMissingOnDisk()) {
+            $this->notifyError('The project folder still exists. Use Destroy to remove a real site.');
+
+            return;
+        }
+
+        $this->deleteSiteRecordAndRedirect();
+    }
+
+    private function deleteSiteRecordAndRedirect(): void
+    {
+        $siteName = $this->site->name;
+        $this->site->delete();
+        $this->dispatch('site-deleted')->to(SiteList::class);
+        $this->notifySuccess("Removed '{$siteName}' from the app.");
+        $this->redirect(route('create', [], false), navigate: false);
     }
 
     public function loadAvailableThemes(): void
@@ -102,27 +136,47 @@ class SiteDashboard extends Component
         if ($this->site->status !== $newStatus && $this->site->status !== SiteStatus::Creating) {
             $this->site->update(['status' => $newStatus]);
             $this->site->refresh();
-            $this->dispatch('site-status-changed');
+            $this->dispatch('site-status-changed')->to(SiteList::class);
         }
     }
 
     public function startSite(): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
         $this->runAction('Starting', app(LandoService::class)->start($this->site->path));
     }
 
     public function stopSite(): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
         $this->runAction('Stopping', app(LandoService::class)->stop($this->site->path));
     }
 
     public function restartSite(): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
         $this->runAction('Restarting', app(LandoService::class)->restart($this->site->path));
     }
 
     public function rebuildSite(): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
         $this->runAction('Rebuilding', app(LandoService::class)->rebuild($this->site->path));
     }
 
@@ -134,6 +188,12 @@ class SiteDashboard extends Component
     public function destroySite(): void
     {
         $this->showDestroyModal = false;
+
+        if ($this->isProjectMissingOnDisk()) {
+            $this->deleteSiteRecordAndRedirect();
+
+            return;
+        }
 
         $manager = app(SiteManager::class);
         $destroyCmd = $manager->destroySite($this->site);
@@ -179,7 +239,7 @@ class SiteDashboard extends Component
         $this->actionLabel = '';
         $this->actionStartedAt = null;
 
-        $this->dispatch('site-deleted');
+        $this->dispatch('site-deleted')->to(SiteList::class);
         $this->notifySuccess("Site '{$siteName}' destroyed.");
 
         // Relative URL: absolute route() uses APP_URL; Electron/NativePHP often runs on 127.0.0.1:8100.
@@ -189,6 +249,12 @@ class SiteDashboard extends Component
 
     public function openInFinder(): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
         $path = $this->site->path.DIRECTORY_SEPARATOR.'wp';
         $platform = app(PlatformDetector::class);
 
@@ -206,12 +272,24 @@ class SiteDashboard extends Component
 
     public function showChangePassword(): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
         $this->newPassword = '';
         $this->showPasswordModal = true;
     }
 
     public function changePassword(): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
         $this->validate([
             'newPassword' => 'required|min:6',
         ]);
@@ -225,6 +303,12 @@ class SiteDashboard extends Component
 
     public function changePhpVersion(string $version): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
         if ($version === $this->site->php_version) {
             return;
         }
@@ -237,6 +321,12 @@ class SiteDashboard extends Component
 
     public function changeDbVersion(string $version): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
         if ($version === $this->site->db_version) {
             return;
         }
@@ -249,6 +339,12 @@ class SiteDashboard extends Component
 
     public function changeRedisVersion(string $version): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
         if ($version === $this->site->redis_version) {
             return;
         }
@@ -262,15 +358,28 @@ class SiteDashboard extends Component
     private function regenerateLandoYaml(): void
     {
         $generator = app(LandoYamlGenerator::class);
+        $dbPort = $this->site->db_port;
+        if ($dbPort === null) {
+            $dbPort = app(SiteManager::class)->allocateDatabaseForwardPort();
+            $this->site->update(['db_port' => $dbPort]);
+            $this->site->refresh();
+        }
         $generator->write($this->site->name, $this->site->path, [
             'php_version' => $this->site->php_version,
             'db_version' => $this->site->db_version,
             'redis_version' => $this->site->redis_version,
+            'db_port' => $dbPort,
         ]);
     }
 
     public function switchTheme(string $themeName): void
     {
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
         if ($themeName === $this->activeTheme || $themeName === '') {
             return;
         }
@@ -346,7 +455,7 @@ class SiteDashboard extends Component
             $this->site->update(['status' => $newStatus]);
             $this->site->refresh();
 
-            $this->dispatch('site-status-changed');
+            $this->dispatch('site-status-changed')->to(SiteList::class);
             $this->notifySuccess("{$completedAction} completed.");
             $this->refreshSiteInfo();
         }

@@ -1,6 +1,6 @@
 <div @if($isExecuting) wire:poll.3s="checkCommandStatus" @endif>
     <flux:heading size="xl">New Website</flux:heading>
-    <flux:subheading class="mt-1">Create a new WordPress site with Sage theme</flux:subheading>
+    <flux:subheading class="mt-1">Create a new WordPress site; optionally install the Sage starter theme</flux:subheading>
 
     @if(!$showProgress)
         {{-- Creation Form --}}
@@ -9,7 +9,7 @@
                 <flux:label>Site Name</flux:label>
                 <flux:input wire:model.live.debounce.300ms="siteName" placeholder="my-awesome-site" />
                 <flux:error name="siteName" />
-                <flux:description>Will be used as the Lando project name and theme name</flux:description>
+                <flux:description>Used as the Lando project name{{ $installSage ? ' and Sage theme folder name' : '' }}</flux:description>
             </flux:field>
 
             <flux:field>
@@ -41,6 +41,19 @@
                 <flux:input wire:model="adminEmail" type="email" placeholder="admin@example.com" />
                 <flux:error name="adminEmail" />
             </flux:field>
+
+            <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 p-5 sm:p-6">
+                <div class="flex flex-row items-center gap-5 sm:gap-6 min-w-0">
+                    <div class="flex w-12 h-12 sm:w-28 sm:h-28 items-center justify-center" aria-hidden="true">
+                        <svg class="h-full w-full object-contain" viewBox="0 0 81 74" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M24.837 10.873l5.755 17.07-15.065-10.55L0 28.266l5.897 17.492.034.1h18.622L9.487 56.408l5.897 17.493.034.099h19.191l5.755-17.07 5.72 16.97.034.1H65.31l5.93-17.592-15.065-10.55h18.622l5.93-17.592-15.526-10.873-15.066 10.55 5.755-17.07L40.364 0 24.837 10.873zm.352 34.786l5.797-17.194h18.755l5.797 17.194-15.174 10.626-15.175-10.626z" fill="#525DDC" fill-rule="nonzero" />
+                        </svg>
+                    </div>
+                    <div class="min-w-0 flex-1 pt-0.5">
+                        <flux:checkbox wire:model.live="installSage" label="Install Sage theme" description="Installs Composer dependencies, runs Yarn, builds the assets, and activates the theme after everything is installed." />
+                    </div>
+                </div>
+            </div>
 
             <div class="flex items-center gap-3 pt-4">
                 <flux:button type="submit" variant="primary" icon="rocket-launch">

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/assets/rocket.svg" alt="LandoDEV" width="90" height="75" />
+  <img src="public/assets/rocket.png" alt="LandoDEV" width="60" height="60" />
 </p>
 
 # LandoDEV
@@ -77,7 +77,7 @@ Use **relative** `route(..., [], false)` / `wire:navigate` where the app is serv
 | `resources/views/flux/` | Published Flux overrides (e.g. `brand.blade.php`) |
 | `config/lando_dev/` | Default PHP/DB/Redis version lists |
 | `scripts/` | `native-dev.sh`, `native-php.sh`, Native/Electron helpers |
-| `public/assets/` | Static assets (e.g. `rocket.svg` logo) |
+| `public/assets/` | Static assets (e.g. `rocket.png` logo) |
 
 ## Tests & style
 

@@ -16,9 +16,26 @@ class SshService
 
     public function buildRsyncPluginsCommand(RemoteSite $remote, string $localPluginsPath): string
     {
-        $remotePath = "applications/{$remote->db_name}/public_html/wp-content/plugins/";
+        $remotePlugins = $this->remotePluginsDirectory($remote);
+        $host = "{$remote->ssh_user}@{$remote->ssh_server_ip}";
+        $remoteArg = escapeshellarg($remotePlugins);
+        $localArg = escapeshellarg($localPluginsPath);
 
-        return "sshpass -p '{$remote->ssh_password}' rsync -avz -e 'ssh -o StrictHostKeyChecking=no' {$remote->ssh_user}@{$remote->ssh_server_ip}:{$remotePath} {$localPluginsPath}";
+        return "sshpass -p '{$remote->ssh_password}' rsync -avz -e 'ssh -o StrictHostKeyChecking=no' {$host}:{$remoteArg} {$localArg}";
+    }
+
+    /**
+     * Path to wp-content/plugins on the remote host (rsync source).
+     * Prefers explicit {@see RemoteSite::$remote_path}; otherwise legacy pattern relative to SSH home.
+     */
+    public function remotePluginsDirectory(RemoteSite $remote): string
+    {
+        $root = $remote->remote_path;
+        if (is_string($root) && $root !== '') {
+            return rtrim($root, '/').'/wp-content/plugins/';
+        }
+
+        return "applications/{$remote->db_name}/public_html/wp-content/plugins/";
     }
 
     public function buildHtaccessRewriteContent(string $remoteDomain): string

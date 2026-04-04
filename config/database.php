@@ -32,10 +32,13 @@ return [
 
     'connections' => [
 
+        // Default file matches NativePHP dev: {@see NativeServiceProvider::rewriteDatabase()} uses
+        // database/nativephp.sqlite when NATIVEPHP_RUNNING and APP_DEBUG=true, so Artisan and the
+        // desktop app share one DB. Override with DB_DATABASE if you need a different path.
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            'database' => env('DB_DATABASE', database_path('nativephp.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => null,

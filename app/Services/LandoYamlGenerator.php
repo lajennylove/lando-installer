@@ -16,6 +16,7 @@ class LandoYamlGenerator
             '{{PHP_VERSION}}' => $options['php_version'] ?? config('lando_dev.defaults.php_version'),
             '{{DB_VERSION}}' => $options['db_version'] ?? config('lando_dev.defaults.db_version'),
             '{{REDIS_VERSION}}' => $options['redis_version'] ?? config('lando_dev.defaults.redis_version'),
+            '{{DB_PORT}}' => (string) ($options['db_port'] ?? config('lando_dev.defaults.database_forward_port_start')),
         ];
 
         return str_replace(array_keys($replacements), array_values($replacements), $stub);

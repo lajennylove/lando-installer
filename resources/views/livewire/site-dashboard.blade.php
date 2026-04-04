@@ -15,21 +15,40 @@
         </div>
     </div>
 
+    @if($this->isProjectMissingOnDisk())
+        <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <flux:heading size="sm" class="text-amber-900 dark:text-amber-100">Project folder missing</flux:heading>
+            <flux:text class="mt-1 text-sm text-amber-800 dark:text-amber-200/90">
+                Nothing exists at <span class="font-mono">{{ $site->path }}</span>. Lando actions are disabled. You can remove this stale entry from the sidebar (your database only — nothing left on disk to delete).
+            </flux:text>
+            <div class="mt-3">
+                <flux:button
+                    wire:click="removeOrphanFromApp"
+                    wire:confirm="Remove '{{ $site->name }}' from the app? This only deletes the app record."
+                    size="sm"
+                    variant="primary"
+                >
+                    Remove from app
+                </flux:button>
+            </div>
+        </div>
+    @endif
+
     {{-- Action Buttons --}}
     <div class="mt-6 flex flex-wrap items-center gap-3">
-        <flux:button wire:click="startSite" variant="primary" size="sm" icon="play" :disabled="$actionRunning">
+        <flux:button wire:click="startSite" variant="primary" size="sm" icon="play" :disabled="$actionRunning || $this->isProjectMissingOnDisk()">
             Start
         </flux:button>
-        <flux:button wire:click="stopSite" size="sm" icon="stop" :disabled="$actionRunning">
+        <flux:button wire:click="stopSite" size="sm" icon="stop" :disabled="$actionRunning || $this->isProjectMissingOnDisk()">
             Stop
         </flux:button>
-        <flux:button wire:click="restartSite" size="sm" icon="arrow-path" :disabled="$actionRunning">
+        <flux:button wire:click="restartSite" size="sm" icon="arrow-path" :disabled="$actionRunning || $this->isProjectMissingOnDisk()">
             Restart
         </flux:button>
-        <flux:button wire:click="rebuildSite" size="sm" icon="wrench" :disabled="$actionRunning">
+        <flux:button wire:click="rebuildSite" size="sm" icon="wrench" :disabled="$actionRunning || $this->isProjectMissingOnDisk()">
             Rebuild
         </flux:button>
-        <flux:button wire:click="openInFinder" size="sm" icon="folder-open" :disabled="$actionRunning">
+        <flux:button wire:click="openInFinder" size="sm" icon="folder-open" :disabled="$actionRunning || $this->isProjectMissingOnDisk()">
             Open Folder
         </flux:button>
         <flux:button wire:click="confirmDestroy" variant="danger" size="sm" icon="trash" :disabled="$actionRunning">
@@ -76,14 +95,14 @@
                     <flux:text class="text-sm text-zinc-500">Admin Password</flux:text>
                     <div class="flex items-center gap-2">
                         <flux:text class="text-sm text-zinc-400">********</flux:text>
-                        <flux:button wire:click="showChangePassword" size="xs" variant="ghost" icon="pencil" />
+                        <flux:button wire:click="showChangePassword" size="xs" variant="ghost" icon="pencil" :disabled="$this->isProjectMissingOnDisk()" />
                     </div>
                 </div>
                 <div class="flex justify-between items-center px-4 py-3">
                     <flux:text class="text-sm text-zinc-500">Project Path</flux:text>
                     <div class="flex items-center gap-2">
                         <flux:text class="text-sm font-mono truncate max-w-xs">{{ $site->path }}</flux:text>
-                        <flux:button wire:click="openInFinder" size="xs" variant="ghost" icon="folder-open" />
+                        <flux:button wire:click="openInFinder" size="xs" variant="ghost" icon="folder-open" :disabled="$this->isProjectMissingOnDisk()" />
                     </div>
                 </div>
             </div>
@@ -111,7 +130,7 @@
                     <select
                         wire:change="changePhpVersion($event.target.value)"
                         class="text-sm bg-transparent border-0 text-right cursor-pointer focus:ring-0 p-0 dark:text-white"
-                        @disabled($actionRunning)
+                        @disabled($actionRunning || $this->isProjectMissingOnDisk())
                     >
                         @foreach($phpVersions as $v)
                             <option value="{{ $v }}" @selected($v === $site->php_version)>{{ $v }}</option>
@@ -123,7 +142,7 @@
                     <select
                         wire:change="changeDbVersion($event.target.value)"
                         class="text-sm bg-transparent border-0 text-right cursor-pointer focus:ring-0 p-0 dark:text-white"
-                        @disabled($actionRunning)
+                        @disabled($actionRunning || $this->isProjectMissingOnDisk())
                     >
                         @foreach($dbVersions as $v)
                             <option value="{{ $v }}" @selected($v === $site->db_version)>{{ $v }}</option>
@@ -132,14 +151,14 @@
                 </div>
                 <div class="flex justify-between items-center px-4 py-3">
                     <flux:text class="text-sm text-zinc-500">DB Port</flux:text>
-                    <flux:text class="text-sm">{{ $site->db_port ?? '32787' }}</flux:text>
+                    <flux:text class="text-sm">{{ $site->db_port ?? config('lando_dev.defaults.database_forward_port_start') }}</flux:text>
                 </div>
                 <div class="flex justify-between items-center px-4 py-3">
                     <flux:text class="text-sm text-zinc-500">Redis</flux:text>
                     <select
                         wire:change="changeRedisVersion($event.target.value)"
                         class="text-sm bg-transparent border-0 text-right cursor-pointer focus:ring-0 p-0 dark:text-white"
-                        @disabled($actionRunning)
+                        @disabled($actionRunning || $this->isProjectMissingOnDisk())
                     >
                         @foreach($redisVersions as $v)
                             <option value="{{ $v }}" @selected($v === $site->redis_version)>{{ $v }}</option>
@@ -152,7 +171,7 @@
                         <select
                             wire:change="switchTheme($event.target.value)"
                             class="text-sm bg-transparent border-0 text-right cursor-pointer focus:ring-0 p-0 dark:text-white"
-                            @disabled($actionRunning)
+                            @disabled($actionRunning || $this->isProjectMissingOnDisk())
                         >
                             @foreach($availableThemes as $theme)
                                 <option value="{{ $theme['name'] }}" @selected($theme['name'] === $activeTheme)>
@@ -211,19 +230,31 @@
     {{-- Destroy Confirmation Modal --}}
     <flux:modal wire:model="showDestroyModal" class="max-w-md">
         <div class="space-y-4">
-            <flux:heading size="lg">Destroy Site?</flux:heading>
-            <flux:text>
-                This will permanently destroy the Lando containers and <strong>delete all files</strong> at:
-            </flux:text>
-            <div class="p-2 rounded bg-zinc-100 dark:bg-zinc-800 font-mono text-sm">
-                {{ $site->path }}
-            </div>
-            <flux:text class="text-red-600 dark:text-red-400 font-medium">
-                This action cannot be undone.
-            </flux:text>
+            @if($this->isProjectMissingOnDisk())
+                <flux:heading size="lg">Remove stale site?</flux:heading>
+                <flux:text>
+                    The project folder is already gone. Confirming will only remove <strong>{{ $site->name }}</strong> from this app (database record). Nothing will be deleted from disk.
+                </flux:text>
+                <div class="p-2 rounded bg-zinc-100 dark:bg-zinc-800 font-mono text-sm">
+                    {{ $site->path }}
+                </div>
+            @else
+                <flux:heading size="lg">Destroy Site?</flux:heading>
+                <flux:text>
+                    This will permanently destroy the Lando containers and <strong>delete all files</strong> at:
+                </flux:text>
+                <div class="p-2 rounded bg-zinc-100 dark:bg-zinc-800 font-mono text-sm">
+                    {{ $site->path }}
+                </div>
+                <flux:text class="text-red-600 dark:text-red-400 font-medium">
+                    This action cannot be undone.
+                </flux:text>
+            @endif
             <div class="flex justify-end gap-3 pt-2">
                 <flux:button wire:click="$set('showDestroyModal', false)" variant="ghost">Cancel</flux:button>
-                <flux:button wire:click="destroySite" variant="danger" icon="trash">Destroy</flux:button>
+                <flux:button wire:click="destroySite" variant="danger" icon="trash">
+                    {{ $this->isProjectMissingOnDisk() ? 'Remove from app' : 'Destroy' }}
+                </flux:button>
             </div>
         </div>
     </flux:modal>

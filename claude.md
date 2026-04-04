@@ -34,7 +34,7 @@ A **desktop-first** developer tool: **Electron** shell (via **NativePHP**) runni
 
 3. **ANSI in logs**: Blade uses `App\Support\AnsiToHtml::lineToHtml()` for terminal blocks.
 
-4. **Logo UI**: `public/assets/rocket.svg`; Flux `brand` view overridden under `resources/views/flux/brand.blade.php`; global classes `.app-logo-frame` / `.app-logo-img` in `resources/css/app.css` (clip-path fixes SVG-as-`<img>` corners in WebKit/Electron).
+4. **Logo UI**: `public/assets/rocket.png`; Flux `brand` view overridden under `resources/views/flux/brand.blade.php` (logo `size-[60px]` on `<img>`, no extra rounded wrapper).
 
 5. **Vite port 5175** — conflicts avoided with Electron’s 5173.
 

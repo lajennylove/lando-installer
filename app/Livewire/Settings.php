@@ -4,10 +4,13 @@ namespace App\Livewire;
 
 use App\Livewire\Concerns\WithNotifications;
 use App\Models\RemoteSite;
+use App\Services\ApplicationDatabaseReset;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Title('LandoDEV')]
 class Settings extends Component
 {
     use WithNotifications;
@@ -42,6 +45,9 @@ class Settings extends Component
 
     public string $sshPassword = '';
 
+    /** Absolute path to WordPress root on the remote server (directory that contains wp-config.php). */
+    public string $remotePath = '';
+
     public string $dbName = '';
 
     public string $dbUser = '';
@@ -55,6 +61,8 @@ class Settings extends Component
     public bool $showDeleteModal = false;
 
     public ?int $deletingRemoteSiteId = null;
+
+    public bool $showResetAppDataModal = false;
 
     public function mount(): void
     {
@@ -153,6 +161,7 @@ class Settings extends Component
         $this->sshServerIp = $remote->ssh_server_ip;
         $this->sshUser = $remote->ssh_user;
         $this->sshPassword = $remote->ssh_password ?? '';
+        $this->remotePath = $remote->remote_path ?? '';
         $this->dbName = $remote->db_name;
         $this->dbUser = $remote->db_user;
         $this->dbPassword = $remote->db_password ?? '';
@@ -167,6 +176,7 @@ class Settings extends Component
             'remoteDomain' => 'required|url',
             'sshServerIp' => 'required',
             'sshUser' => 'required',
+            'remotePath' => 'required|string|max:512',
             'dbName' => 'required',
             'dbUser' => 'required',
         ]);
@@ -177,6 +187,7 @@ class Settings extends Component
             'ssh_server_ip' => $this->sshServerIp,
             'ssh_user' => $this->sshUser,
             'ssh_password' => $this->sshPassword ?: null,
+            'remote_path' => rtrim($this->remotePath),
             'db_name' => $this->dbName,
             'db_user' => $this->dbUser,
             'db_password' => $this->dbPassword ?: null,
@@ -227,11 +238,30 @@ class Settings extends Component
         $this->sshServerIp = '';
         $this->sshUser = '';
         $this->sshPassword = '';
+        $this->remotePath = '';
         $this->dbName = '';
         $this->dbUser = '';
         $this->dbPassword = '';
         $this->themeName = '';
         $this->repoUrl = '';
+    }
+
+    public function resetApplicationData(): void
+    {
+        ApplicationDatabaseReset::wipe();
+        $this->showResetAppDataModal = false;
+        $this->notifySuccess('Application data cleared on all app database files (including NativePHP).');
+        // Sidebar SiteList is outside this component’s DOM subtree; events must target it explicitly.
+        $this->dispatch('application-data-reset')->to(SiteList::class);
+        $this->dispatch('site-deleted')->to(SiteList::class);
+    }
+
+    /**
+     * @return list<array{connection: string, path: string, file_exists: bool, site_count: int|null, error?: string}>
+     */
+    public function databaseLocationRows(): array
+    {
+        return ApplicationDatabaseReset::sqliteLocationsForDisplay();
     }
 
     public function render()

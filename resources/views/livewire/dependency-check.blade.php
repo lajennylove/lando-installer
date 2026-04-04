@@ -1,9 +1,7 @@
 <div @if($installing) wire:poll.3s="pollInstallStatus" @endif>
     <div class="max-w-2xl mx-auto">
         <div class="text-center mb-8">
-            <div class="app-logo-frame mx-auto mb-4">
-                <img src="/assets/rocket.svg" alt="LandoDEV" class="app-logo-img" />
-            </div>
+            <img src="{{ asset('assets/rocket.png') }}" alt="LandoDEV" class="mx-auto mb-4 size-[60px] object-contain" />
             <flux:heading size="xl">Welcome to LandoDEV</flux:heading>
             <flux:subheading class="mt-2">Let's make sure you have everything you need</flux:subheading>
         </div>

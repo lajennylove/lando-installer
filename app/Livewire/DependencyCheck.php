@@ -7,10 +7,12 @@ use App\Services\DependencyChecker;
 use App\Services\DependencyInstaller;
 use App\Services\PlatformDetector;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 use Native\Laravel\Facades\ChildProcess;
 
 #[Layout('components.layouts.app')]
+#[Title('LandoDEV')]
 class DependencyCheck extends Component
 {
     use WithNotifications;

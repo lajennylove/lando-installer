@@ -23,4 +23,6 @@ return [
     'db_user' => 'wordpress',
     'db_password' => 'wordpress',
     'db_host' => 'database',
+    // Host port published for MariaDB (each Lando site must use a unique value).
+    'database_forward_port_start' => (int) env('LANDO_DATABASE_FORWARD_PORT_START', 32_787),
 ];

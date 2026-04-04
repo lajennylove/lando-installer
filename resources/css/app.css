@@ -3,7 +3,7 @@
 @import 'tailwindcss';
 @import '../../vendor/livewire/flux/dist/flux.css';
 
-@source '../views';
+@source '../views/**/*.blade.php';
 @source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
 @source '../../vendor/livewire/flux/stubs/**/*.blade.php';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -66,16 +66,4 @@
 
 .terminal-line:hover {
     background-color: rgba(255, 255, 255, 0.05);
-}
-
-/*
- * SVG-as-<img>: border-radius is often ignored in WebKit/Electron; clip-path matches Flux button rounded-lg.
- */
-.app-logo-frame {
-    @apply relative shrink-0 overflow-hidden rounded-lg size-[50px];
-}
-
-.app-logo-img {
-    @apply block size-full object-contain;
-    clip-path: inset(0 round 0.5rem);
 }

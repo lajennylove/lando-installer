@@ -55,6 +55,41 @@
         </div>
     </div>
 
+    {{-- Application data (SQLite) — sidebar reads sites table; deleting folders/Docker does not remove rows --}}
+    <div class="mt-10">
+        <flux:heading size="lg">Application data</flux:heading>
+        <flux:subheading class="mt-1">
+            Local sites in the sidebar are stored in this app’s SQLite database. Removing project folders or Lando containers does not remove those rows.
+            In local dev, the desktop app and <code class="font-mono text-xs">php artisan</code> normally use the same file; release builds may also use a database under Application Support. Reset clears every distinct file listed below.
+        </flux:subheading>
+        <div class="mt-3 space-y-1 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900/40 p-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+            @foreach($this->databaseLocationRows() as $row)
+                <div>
+                    <span class="font-semibold text-zinc-800 dark:text-zinc-200">{{ $row['connection'] }}</span>
+                    @if($row['path'] !== '')
+                        <span class="break-all"> — {{ $row['path'] }}</span>
+                    @endif
+                    @if(array_key_exists('site_count', $row) && $row['site_count'] !== null)
+                        <span> ({{ $row['site_count'] }} {{ $row['site_count'] === 1 ? 'site' : 'sites' }})</span>
+                    @endif
+                    @if(! empty($row['error']))
+                        <span class="text-red-600 dark:text-red-400"> — {{ $row['error'] }}</span>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+        <div class="mt-4 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <flux:text class="text-sm text-zinc-600 dark:text-zinc-300">
+                    Clear all local sites, command history, remote site presets, and sessions. Version defaults above are kept.
+                </flux:text>
+                <flux:button wire:click="$set('showResetAppDataModal', true)" variant="danger" icon="trash">
+                    Reset application data
+                </flux:button>
+            </div>
+        </div>
+    </div>
+
     {{-- Remote Sites Section --}}
     <div class="mt-10">
         <div class="flex items-center justify-between">
@@ -102,6 +137,19 @@
                             <flux:input wire:model="sshPassword" type="password" />
                         </flux:field>
                     </div>
+
+                    <flux:field>
+                        <flux:label>WordPress root path (on server)</flux:label>
+                        <flux:input
+                            wire:model="remotePath"
+                            placeholder="/home/master/applications/pphhzzudbv/public_html"
+                            class="font-mono text-sm"
+                        />
+                        <flux:description>
+                            Absolute path to the folder that contains <code class="text-xs">wp-config.php</code> (run <code class="text-xs">pwd</code> after <code class="text-xs">cd …/public_html</code>). Used when syncing plugins from the server.
+                        </flux:description>
+                        <flux:error name="remotePath" />
+                    </flux:field>
 
                     <flux:separator />
                     <flux:heading size="xs">Database</flux:heading>
@@ -162,8 +210,11 @@
                                 <flux:heading size="sm">{{ $remote->remote_domain }}</flux:heading>
                                 <flux:text class="text-sm text-zinc-500">
                                     {{ $remote->ssh_user }}@{{ $remote->ssh_server_ip }}
+                                    @if($remote->remote_path)
+                                        <span class="block mt-0.5 font-mono text-xs truncate max-w-xl" title="{{ $remote->remote_path }}">{{ $remote->remote_path }}</span>
+                                    @endif
                                     @if($remote->theme_name)
-                                        &middot; Theme: {{ $remote->theme_name }}
+                                        <span class="block">Theme: {{ $remote->theme_name }}</span>
                                     @endif
                                 </flux:text>
                             </div>
@@ -186,6 +237,20 @@
             <div class="flex justify-end gap-3">
                 <flux:button wire:click="$set('showDeleteModal', false)" variant="ghost">Cancel</flux:button>
                 <flux:button wire:click="deleteRemoteSite" variant="danger" icon="trash">Delete</flux:button>
+            </div>
+        </div>
+    </flux:modal>
+
+    <flux:modal wire:model="showResetAppDataModal" class="max-w-md">
+        <div class="space-y-4">
+            <flux:heading size="lg">Reset application data?</flux:heading>
+            <flux:text>
+                This permanently deletes every row for local sites (sidebar list), command logs, remote site SSH presets, and active sessions.
+                It does not run <code class="font-mono text-xs">lando destroy</code> or delete files on disk.
+            </flux:text>
+            <div class="flex justify-end gap-3">
+                <flux:button wire:click="$set('showResetAppDataModal', false)" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="resetApplicationData" variant="danger" icon="trash">Reset data</flux:button>
             </div>
         </div>
     </flux:modal>

@@ -5,12 +5,24 @@
 
         <div class="mt-8 space-y-6">
             <div class="flex items-center gap-4">
-                <div class="app-logo-frame shrink-0">
-                    <img src="/assets/rocket.svg" alt="LandoDEV" class="app-logo-img" />
-                </div>
+                <img src="{{ asset('assets/rocket.png') }}" alt="LandoDEV" class="size-[60px] shrink-0 object-contain" />
                 <div>
                     <flux:heading size="lg">LandoDEV</flux:heading>
                     <flux:text class="text-zinc-500">Version {{ config('nativephp.version', '1.0.0') }}</flux:text>
+                    @if($url = config('app.repository_url'))
+                        <flux:text class="text-zinc-500 mt-1">
+                            Repository:
+                            <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline dark:text-blue-400">
+                                {{ $url }}
+                            </a>
+                        </flux:text>
+                    @endif
+                    <flux:text class="text-zinc-500 mt-1">
+                        Author:
+                        <a href="{{ config('app.author.github_url') }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline dark:text-blue-400">
+                            {{ config('app.author.name') }}
+                        </a>
+                    </flux:text>
                 </div>
             </div>
 

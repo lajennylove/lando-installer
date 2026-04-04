@@ -20,8 +20,8 @@ Host PHP (NativePHP/Electron) is separate from **Lando container** PHP — versi
 - `app/Livewire/` — page components (`SiteDashboard`, `NewSite`, `CloneSite`, `Settings`, etc.)
 - `app/Livewire/Concerns/WithCommandExecution.php` — multi-step Lando sequences + polling
 - `app/Services/LandoService.php`, `SiteManager.php`, `LandoYamlGenerator.php`
-- `resources/views/flux/brand.blade.php` — published Flux brand (logo sizing, `.app-logo-frame` / `.app-logo-img` in CSS)
-- `resources/css/app.css` — Tailwind + Flux; terminal + logo clip-path helpers
+- `resources/views/flux/brand.blade.php` — published Flux brand (60×60 logo via `size-[60px]`)
+- `resources/css/app.css` — Tailwind + Flux; terminal scrollbar helpers
 - `scripts/native-dev.sh`, `scripts/native-php.sh` — Native dev entrypoints
 
 ## Commands

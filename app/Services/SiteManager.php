@@ -29,7 +29,22 @@ class SiteManager
         ];
     }
 
-    public function createNewSite(string $name, string $adminUser, string $adminPass, string $adminEmail, ?string $path = null): Site
+    /**
+     * Next unique host port for database portforward in .lando.yml (avoids Docker bind conflicts).
+     */
+    public function allocateDatabaseForwardPort(): int
+    {
+        $start = (int) config('lando_dev.defaults.database_forward_port_start', 32_787);
+        $maxExisting = Site::query()->max('db_port');
+
+        if ($maxExisting === null) {
+            return $start;
+        }
+
+        return max($start, (int) $maxExisting + 1);
+    }
+
+    public function createNewSite(string $name, string $adminUser, string $adminPass, string $adminEmail, ?string $path = null, bool $installSage = true): Site
     {
         $slug = Str::slug($name);
         $sitePath = $path ?? ($this->platform->defaultCodePath().DIRECTORY_SEPARATOR.$slug);
@@ -45,7 +60,8 @@ class SiteManager
         }
 
         $versions = $this->resolvedLandoVersions();
-        $this->yamlGenerator->write($slug, $sitePath, $versions);
+        $dbPort = $this->allocateDatabaseForwardPort();
+        $this->yamlGenerator->write($slug, $sitePath, array_merge($versions, ['db_port' => $dbPort]));
 
         // Create .nvmrc for Node version consistency
         file_put_contents($sitePath.DIRECTORY_SEPARATOR.'.nvmrc', "22\n");
@@ -60,19 +76,20 @@ class SiteManager
             'php_version' => $versions['php_version'],
             'db_version' => $versions['db_version'],
             'redis_version' => $versions['redis_version'],
+            'db_port' => $dbPort,
             'admin_username' => $adminUser,
             'admin_email' => $adminEmail,
-            'theme_name' => $slug,
+            'theme_name' => $installSage ? $name : null,
         ]);
     }
 
-    public function getNewSiteSteps(Site $site, ?string $adminPassword = null): array
+    public function getNewSiteSteps(Site $site, ?string $adminPassword = null, bool $installSage = true): array
     {
         $path = $site->path;
         $name = $site->name;
         $adminPass = $adminPassword ?? 'admin';
 
-        return [
+        $steps = [
             [
                 'label' => 'Starting Lando environment',
                 'command' => $this->lando->start($path),
@@ -93,6 +110,13 @@ class SiteManager
                 'command' => $this->lando->wpCoreInstall($path, $name, (string) $site->admin_username, $adminPass, (string) $site->admin_email),
                 'step' => 4,
             ],
+        ];
+
+        if (! $installSage) {
+            return $steps;
+        }
+
+        return array_merge($steps, [
             [
                 'label' => 'Creating Sage theme',
                 'command' => $this->lando->composerCreateProject($path, 'roots/sage', $name),
@@ -118,7 +142,7 @@ class SiteManager
                 'command' => $this->lando->wpThemeActivate($path, $name),
                 'step' => 9,
             ],
-        ];
+        ]);
     }
 
     public function cloneSite(RemoteSite $remoteSite, string $name, ?string $path = null): Site
@@ -136,7 +160,8 @@ class SiteManager
         }
 
         $versions = $this->resolvedLandoVersions();
-        $this->yamlGenerator->write($slug, $sitePath, $versions);
+        $dbPort = $this->allocateDatabaseForwardPort();
+        $this->yamlGenerator->write($slug, $sitePath, array_merge($versions, ['db_port' => $dbPort]));
 
         return Site::create([
             'name' => $slug,
@@ -148,6 +173,7 @@ class SiteManager
             'php_version' => $versions['php_version'],
             'db_version' => $versions['db_version'],
             'redis_version' => $versions['redis_version'],
+            'db_port' => $dbPort,
             'theme_name' => $remoteSite->theme_name,
             'remote_site_id' => $remoteSite->id,
         ]);

@@ -28,7 +28,7 @@
 - **Navigation**: `route(..., [], false)` for internal links compatible with Electron `127.0.0.1`.
 - **Livewire**: Full-page components use `#[Layout('components.layouts.app')]`. Concerns: `WithCommandExecution`, `WithNotifications`.
 - **Destroy / async**: Do not remove `Site` until Lando teardown + filesystem removal have finished per existing polling contract; then redirect off `/sites/{id}`.
-- **Styling**: Flux-first; custom logo styles in `app.css` (`.app-logo-*`).
+- **Styling**: Flux-first; sidebar logo is `size-[60px]` on `<img>` in `resources/views/flux/brand.blade.php`.
 
 ## Tech references
 

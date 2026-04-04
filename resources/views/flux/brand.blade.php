@@ -11,53 +11,67 @@
 ])
 
 @php
+if (! ($logo instanceof \Illuminate\View\ComponentSlot) && ($logo === null || $logo === '')) {
+    $logo = asset('assets/rocket.png');
+}
+@endphp
+
+@php
 $classes = Flux::classes()
-    ->add('min-h-[50px] flex items-center me-4')
+    ->add('h-12 flex items-center me-4')
     ;
 
-$textClasses = Flux::classes()
-    ->add('text-sm font-medium truncate [:where(&)]:text-zinc-800 dark:[:where(&)]:text-zinc-100')
+$nameLabelClasses = Flux::classes()
+    // Plain utilities: Flux’s dark:[:where(&)]:… selectors often don’t win in Tailwind v4 / Electron, leaving
+    // light-mode zinc-800 on dark sidebars (invisible text). See sidebar bg-zinc-900 in app layout.
+    ->add('min-w-0 truncate text-2xl font-medium text-zinc-900 dark:text-white')
     ;
+
+$brandName = (string) ($name ?? '');
+$brandPrefix = $brandName;
+$brandSuffix = '';
+if ($brandName !== '' && str_ends_with($brandName, 'DEV')) {
+    $brandPrefix = substr($brandName, 0, -3);
+    $brandSuffix = 'DEV';
+}
 @endphp
 
 <?php if ($name): ?>
     <a href="{{ $href }}" {{ $attributes->class([ $classes, 'gap-2' ]) }} data-flux-brand>
         <?php if ($logo instanceof \Illuminate\View\ComponentSlot): ?>
-            <div {{ $logo->attributes->class('app-logo-frame flex items-center justify-center') }}>
+            <div {{ $logo->attributes->class('flex shrink-0 items-center justify-center') }}>
                 {{ $logo }}
             </div>
         <?php else: ?>
-            <div class="app-logo-frame flex items-center justify-center">
-                <?php if ($logoDark): ?>
-                    <img src="{{ $logo }}" alt="{{ $alt }}" class="app-logo-img dark:hidden" />
-                    <img src="{{ $logoDark }}" alt="{{ $alt }}" class="app-logo-img hidden dark:block" />
-                <?php elseif ($logo): ?>
-                    <img src="{{ $logo }}" alt="{{ $alt }}" class="app-logo-img" />
-                <?php else: ?>
-                    {{ $slot }}
-                <?php endif; ?>
-            </div>
+            <?php if ($logoDark): ?>
+                <img src="{{ $logo }}" alt="{{ $alt }}" class="h-12 w-12 object-cover dark:hidden" />
+                <img src="{{ $logoDark }}" alt="{{ $alt }}" class="h-12 w-12 object-cover hidden dark:block" />
+            <?php elseif ($logo): ?>
+                <img src="{{ $logo }}" alt="{{ $alt }}" class="h-12 w-12 object-cover" />
+            <?php else: ?>
+                {{ $slot }}
+            <?php endif; ?>
         <?php endif; ?>
 
-        <div class="{{ $textClasses }}">{{ $name }}</div>
+        <div class="{{ $nameLabelClasses }}">
+            <span>{{ $brandPrefix }}@if($brandSuffix)<span class="font-bold">{{ $brandSuffix }}</span>@endif</span>
+        </div>
     </a>
 <?php else: ?>
     <a href="{{ $href }}" {{ $attributes->class($classes) }} data-flux-brand>
         <?php if ($logo instanceof \Illuminate\View\ComponentSlot): ?>
-            <div {{ $logo->attributes->class('app-logo-frame flex items-center justify-center') }}>
+            <div {{ $logo->attributes->class('flex shrink-0 items-center justify-center') }}>
                 {{ $logo }}
             </div>
         <?php else: ?>
-            <div class="app-logo-frame flex items-center justify-center">
-                <?php if ($logoDark): ?>
-                    <img src="{{ $logo }}" alt="{{ $alt }}" class="app-logo-img dark:hidden" />
-                    <img src="{{ $logoDark }}" alt="{{ $alt }}" class="app-logo-img hidden dark:block" />
-                <?php elseif ($logo): ?>
-                    <img src="{{ $logo }}" alt="{{ $alt }}" class="app-logo-img" />
-                <?php else: ?>
-                    {{ $slot }}
-                <?php endif; ?>
-            </div>
+            <?php if ($logoDark): ?>
+                <img src="{{ $logo }}" alt="{{ $alt }}" class="h-12 w-12 object-cover dark:hidden" />
+                <img src="{{ $logoDark }}" alt="{{ $alt }}" class="h-12 w-12 object-cover hidden dark:block" />
+            <?php elseif ($logo): ?>
+                <img src="{{ $logo }}" alt="{{ $alt }}" class="h-12 w-12 object-cover" />
+            <?php else: ?>
+                {{ $slot }}
+            <?php endif; ?>
         <?php endif; ?>
     </a>
 <?php endif; ?>
