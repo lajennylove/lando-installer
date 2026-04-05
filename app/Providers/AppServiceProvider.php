@@ -19,6 +19,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Clone / Lando progress can exceed Livewire’s default 1MB JSON snapshot limit.
+        config(['livewire.payload.max_size' => 4 * 1024 * 1024]);
     }
 }

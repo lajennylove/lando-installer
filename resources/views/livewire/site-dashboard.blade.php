@@ -196,8 +196,8 @@
                 x-data="{ autoScroll: true }"
                 x-init="$watch('autoScroll', () => {})"
                 x-intersect:leave="autoScroll = false"
-                wire:key="terminal-{{ md5($actionOutput) }}"
-                x-effect="if (autoScroll) $nextTick(() => $el.scrollTop = $el.scrollHeight)"
+                wire:key="site-dashboard-terminal"
+                @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
                 @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
                 class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg h-72 overflow-y-auto"
             >

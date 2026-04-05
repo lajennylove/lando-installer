@@ -12,6 +12,8 @@ class RemoteSite extends Model
     protected $casts = [
         'ssh_password' => 'encrypted',
         'db_password' => 'encrypted',
+        'install_composer_dependencies' => 'boolean',
+        'install_node_dependencies' => 'boolean',
     ];
 
     public function sites(): HasMany

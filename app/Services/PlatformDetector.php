@@ -81,4 +81,15 @@ class PlatformDetector
     {
         return $this->isWindows() ? '/c' : '-c';
     }
+
+    /**
+     * Wrap a shell command so step logging does not steal stdout from inner redirects/pipes.
+     * Example bug: {@code cmd | gzip > dump.gz > log} sends gzip output to log, leaving dump.gz empty.
+     */
+    public function wrapCommandWithLogRedirect(string $command, string $logFile): string
+    {
+        $log = escapeshellarg($logFile);
+
+        return '('.$command.') > '.$log.' 2>&1';
+    }
 }

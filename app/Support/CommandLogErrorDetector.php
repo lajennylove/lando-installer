@@ -22,6 +22,10 @@ final class CommandLogErrorDetector
             'port is already allocated',
             'getaddrinfo for database failed',
             'Error: Database connection error',
+            'The site you have requested is not installed',
+            'Error: The site you have requested is not installed',
+            'Dump file is too small or empty',
+            'mysqldump may have failed',
         ];
 
         foreach ($fatalPatterns as $pattern) {

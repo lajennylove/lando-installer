@@ -185,7 +185,7 @@ class SiteManager
         $name = $site->name;
         $dumpFile = "{$path}/dumpfile.sql.gz";
 
-        return [
+        $steps = [
             [
                 'label' => 'Starting Lando environment',
                 'command' => $this->lando->start($path),
@@ -198,54 +198,154 @@ class SiteManager
             ],
             [
                 'label' => 'Dumping remote database',
+                'hint' => 'Streams SQL over SSH then compresses locally — nothing is written on the remote server. Expect 2–10 minutes depending on database size.',
+                'timeout' => 1200,
                 'command' => $this->ssh->buildMysqldumpCommand($remoteSite, $dumpFile),
                 'step' => 3,
             ],
             [
-                'label' => 'Importing database',
-                'command' => $this->lando->dbImport($path, 'dumpfile.sql.gz'),
+                'label' => 'Validating dump file',
+                'command' => $this->validateDumpFileCommand($dumpFile),
                 'step' => 4,
             ],
             [
-                'label' => 'Cleaning up dump file',
-                'command' => "rm -f {$dumpFile}",
+                'label' => 'Importing database',
+                'command' => $this->lando->dbImport($path, 'dumpfile.sql.gz'),
                 'step' => 5,
             ],
             [
                 'label' => 'Creating WordPress config',
-                'command' => $this->lando->wpConfigCreate($path),
+                'command' => $this->cloneWpConfigCommand($path, $site),
                 'step' => 6,
             ],
             [
-                'label' => 'Replacing domain references',
-                'command' => $this->lando->wpSearchReplace($path, rtrim($remoteSite->remote_domain, '/'), "https://{$name}.lndo.site"),
+                'label' => 'Cleaning up dump file',
+                'command' => $this->removeDumpFileCommand($dumpFile),
                 'step' => 7,
+            ],
+            [
+                'label' => 'Replacing domain references',
+                'hint' => 'Search-Replace prod-url for localdev-url.',
+                'timeout' => 1200,
+                'command' => $this->lando->wpSearchReplaceImported($path, "https://{$name}.lndo.site", $remoteSite->theme_name ?: null),
+                'step' => 8,
+            ],
+            [
+                'label' => 'Activating local theme',
+                // The production DB stores the theme folder name used on the server (e.g. "locker-room").
+                // We clone into a folder named after remote_sites.theme_name (e.g. "lockerroom").
+                // These can differ, causing WordPress to silently output nothing. Force both options
+                // to match the local folder name so the theme is found and rendered correctly.
+                'command' => $remoteSite->theme_name
+                    ? 'cd '.escapeshellarg($path)." && {$this->lando->getLandoPath()} wp option update template ".escapeshellarg($remoteSite->theme_name)." --path=wp && {$this->lando->getLandoPath()} wp option update stylesheet ".escapeshellarg($remoteSite->theme_name).' --path=wp'
+                    : 'echo "No theme configured, skipping theme activation"',
+                'step' => 9,
             ],
             [
                 'label' => 'Syncing plugins from remote',
                 'command' => $this->ssh->buildRsyncPluginsCommand($remoteSite, "{$path}/wp/wp-content/plugins/"),
-                'step' => 8,
+                'step' => 10,
             ],
             [
                 'label' => 'Configuring image proxy',
                 'command' => 'echo '.escapeshellarg($this->ssh->buildHtaccessRewriteContent($remoteSite->remote_domain))." > {$path}/wp/.htaccess",
-                'step' => 9,
-            ],
-            [
-                'label' => 'Installing theme dependencies',
-                'command' => $remoteSite->repo_url
-                    ? "cd {$path}/wp/wp-content/themes && git clone {$remoteSite->repo_url} {$remoteSite->theme_name}"
-                    : 'echo "No repo URL configured, skipping theme clone"',
-                'step' => 10,
-            ],
-            [
-                'label' => 'Building theme',
-                'command' => $remoteSite->theme_name
-                    ? $this->lando->yarn($path, "wp/wp-content/themes/{$remoteSite->theme_name}", 'build')
-                    : 'echo "No theme configured, skipping build"',
                 'step' => 11,
             ],
         ];
+
+        $themeSubdir = $remoteSite->theme_name
+            ? "wp/wp-content/themes/{$remoteSite->theme_name}"
+            : null;
+        $cloneTheme = $remoteSite->repo_url && $remoteSite->theme_name;
+
+        $stepNum = 12;
+        $steps[] = [
+            'label' => 'Cloning theme repository',
+            // --progress forces git to write progress lines to stderr even when stderr is not a TTY
+            // (which it isn't — it's redirected to the step log file). Without it, git is silent
+            // after "Cloning into '...'..." and the 30s log-idle timer fires prematurely, advancing
+            // to the Composer step before the clone finishes — so composer.json isn't there yet.
+            // The trailing echo writes one final line after git exits, confirming the clone is done.
+            'command' => $remoteSite->repo_url
+                ? "cd {$path}/wp/wp-content/themes && git clone --progress {$remoteSite->repo_url} {$remoteSite->theme_name} && echo \"Theme cloned successfully.\""
+                : 'echo "No repo URL configured, skipping theme clone"',
+            'step' => $stepNum++,
+        ];
+
+        if ($cloneTheme) {
+            $themePath = "{$path}/wp/wp-content/themes/{$remoteSite->theme_name}";
+            $steps[] = [
+                'label' => 'Switching to dev branch',
+                'command' => "cd {$themePath} && git checkout dev && echo \"Switched to branch: $(git branch --show-current)\"",
+                'step' => $stepNum++,
+            ];
+        }
+
+        if ($cloneTheme && $remoteSite->install_composer_dependencies && $themeSubdir) {
+            $steps[] = [
+                'label' => 'Installing Composer dependencies',
+                'command' => $this->lando->composerInstall($path, $themeSubdir),
+                'step' => $stepNum++,
+            ];
+        }
+
+        if ($cloneTheme && $remoteSite->install_node_dependencies && $themeSubdir) {
+            $steps[] = [
+                'label' => 'Installing Node dependencies',
+                'command' => $this->lando->yarn($path, $themeSubdir),
+                'step' => $stepNum++,
+            ];
+        }
+
+        $steps[] = [
+            'label' => 'Building theme',
+            'command' => $remoteSite->theme_name && $themeSubdir
+                ? $this->lando->yarn($path, $themeSubdir, 'build')
+                : 'echo "No theme configured, skipping build"',
+            'step' => $stepNum++,
+        ];
+
+        return $steps;
+    }
+
+    /**
+     * Host PHP runs artisan to write wp-config.php (WpConfigGenerator) and detect $table_prefix.
+     */
+    private function cloneWpConfigCommand(string $path, Site $site): string
+    {
+        return sprintf(
+            '%s %s lando-dev:clone-wp-config %s %s',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(base_path('artisan')),
+            escapeshellarg($path),
+            escapeshellarg((string) $site->id)
+        );
+    }
+
+    private function validateDumpFileCommand(string $dumpFile): string
+    {
+        $escaped = escapeshellarg($dumpFile);
+        $minBytes = 500;
+
+        if ($this->platform->isWindows()) {
+            return "powershell -Command \"if ((Get-Item {$escaped}).Length -lt {$minBytes}) { Write-Error 'Dump file is too small or empty - mysqldump may have failed'; exit 1 } else { Write-Host 'Dump file validated' }\"";
+        }
+
+        return "if [ ! -s {$escaped} ] || [ \$(stat -f%z {$escaped} 2>/dev/null || stat -c%s {$escaped} 2>/dev/null) -lt {$minBytes} ]; then echo 'ERROR: Dump file is too small or empty - mysqldump may have failed. Check SSH credentials and remote database settings.' >&2; exit 1; fi; if ! gzip -t {$escaped}; then echo 'ERROR: dumpfile.sql.gz is not a complete gzip archive (transfer or dump may have been interrupted).' >&2; exit 1; fi; echo 'Dump file validated:' && ls -lh {$escaped}";
+    }
+
+    private function removeDumpFileCommand(string $dumpFile): string
+    {
+        $sqlFile = preg_replace('/\.sql\.gz$/u', '.sql', $dumpFile);
+
+        if ($this->platform->isWindows()) {
+            $winGz = str_replace('/', '\\', $dumpFile);
+            $winSql = str_replace('/', '\\', $sqlFile);
+
+            return 'del /f /q '.escapeshellarg($winGz).' '.escapeshellarg($winSql).' 2>nul & echo Dump file removed.';
+        }
+
+        return 'rm -f '.escapeshellarg($dumpFile).' '.escapeshellarg($sqlFile)." && echo 'Removed local dump files (dumpfile.sql / .gz).'";
     }
 
     public function destroySite(Site $site): string

@@ -40,6 +40,10 @@
 #terminal-output {
     scrollbar-width: thin;
     scrollbar-color: #4a5568 #1a202c;
+    /* Monospace + tight lines so Lando ASCII art and columns align (pre-like without <pre>). */
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+        'Courier New', monospace;
+    line-height: 1.15;
 }
 
 #terminal-output::-webkit-scrollbar {
@@ -61,7 +65,10 @@
 
 .terminal-line {
     display: block;
-    line-height: 1.4;
+    white-space: pre;
+    line-height: 1.15;
+    tab-size: 8;
+    font-family: inherit;
 }
 
 .terminal-line:hover {

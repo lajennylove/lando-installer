@@ -113,8 +113,32 @@
                             <flux:error name="remoteDomain" />
                         </flux:field>
                         <flux:field>
-                            <flux:label>Local Domain (auto-generated if blank)</flux:label>
-                            <flux:input wire:model="localDomain" placeholder="https://example.lndo.site" />
+                            <flux:label for="remote-local-site-name">Local site name</flux:label>
+                            <div
+                                class="flex h-10 items-stretch overflow-hidden rounded-lg shadow-xs border border-zinc-200 border-b-zinc-300/80 bg-white divide-x divide-zinc-200 dark:divide-white/10 dark:border-white/10 dark:border-b-white/5 dark:bg-white/10 focus-within:ring-2 focus-within:ring-zinc-400/30 focus-within:border-zinc-300 dark:focus-within:ring-white/20 dark:focus-within:border-white/20"
+                            >
+                                <span
+                                    class="inline-flex items-center px-3 text-xs font-mono text-zinc-500 bg-zinc-50 select-none sm:text-sm dark:text-zinc-400 dark:bg-zinc-900/50"
+                                    aria-hidden="true"
+                                >https://</span>
+                                <input
+                                    id="remote-local-site-name"
+                                    type="text"
+                                    name="localSiteName"
+                                    wire:model="localSiteName"
+                                    placeholder="my-site"
+                                    autocomplete="off"
+                                    class="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-zinc-700 placeholder-zinc-400 focus:ring-0 dark:text-zinc-200 dark:placeholder-zinc-500"
+                                />
+                                <span
+                                    class="inline-flex items-center px-3 text-xs font-mono text-zinc-500 bg-zinc-50 select-none sm:text-sm dark:text-zinc-400 dark:bg-zinc-900/50"
+                                    aria-hidden="true"
+                                >.lndo.site</span>
+                            </div>
+                            <flux:description>
+                                Optional. The name is slugified when saved (HTTPS). Leave blank if you do not need a preset.
+                            </flux:description>
+                            <flux:error name="localSiteName" />
                         </flux:field>
                     </div>
 
@@ -181,9 +205,22 @@
                         </flux:field>
                         <flux:field>
                             <flux:label>Git Repo URL</flux:label>
-                            <flux:input wire:model="repoUrl" placeholder="https://github.com/..." />
+                            <flux:input wire:model.live.debounce.300ms="repoUrl" placeholder="https://github.com/..." />
                         </flux:field>
                     </div>
+
+                    @if(filled(trim($repoUrl)))
+                        <div class="space-y-2">
+                            <flux:checkbox
+                                wire:model="installComposerDependencies"
+                                label="Install Composer dependencies"
+                            />
+                            <flux:checkbox
+                                wire:model="installNodeDependencies"
+                                label="Install Node dependencies"
+                            />
+                        </div>
+                    @endif
 
                     <div class="flex items-center gap-3 pt-2">
                         <flux:button type="submit" variant="primary">

@@ -4,7 +4,7 @@
 
     @if(!$showProgress)
         {{-- Creation Form --}}
-        <form wire:submit="createSite" class="mt-8 max-w-lg space-y-6">
+        <form wire:submit="createSite" class="mt-8 w-full max-w-none space-y-6">
             <flux:field>
                 <flux:label>Site Name</flux:label>
                 <flux:input wire:model.live.debounce.300ms="siteName" placeholder="my-awesome-site" />
@@ -109,8 +109,8 @@
                     <div
                         id="terminal-output"
                         x-data="{ autoScroll: true }"
-                        wire:key="terminal-{{ md5($terminalOutput) }}"
-                        x-effect="if (autoScroll) $nextTick(() => $el.scrollTop = $el.scrollHeight)"
+                        wire:key="new-site-terminal"
+                        @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
                         @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
                         class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg h-72 overflow-y-auto"
                     >

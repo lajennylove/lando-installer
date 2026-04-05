@@ -9,6 +9,7 @@ use App\Services\LandoService;
 use App\Services\LandoYamlGenerator;
 use App\Services\PlatformDetector;
 use App\Services\SiteManager;
+use App\Support\LogContentUtf8;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -223,8 +224,10 @@ class SiteDashboard extends Component
 
         $platform = app(PlatformDetector::class);
 
+        $wrapped = $platform->wrapCommandWithLogRedirect($shellCommand, $logFile);
+
         ChildProcess::start(
-            cmd: [$platform->shellWrapper(), $platform->shellFlag(), $shellCommand." > '{$logFile}' 2>&1"],
+            cmd: [$platform->shellWrapper(), $platform->shellFlag(), $wrapped],
             alias: 'destroy-site-'.$this->site->id.'-'.uniqid(),
         );
     }
@@ -407,14 +410,16 @@ class SiteDashboard extends Component
                 $this->actionLabel = '';
                 $this->actionStartedAt = null;
                 $this->actionOutput = 'Command failed to start — log file was never created. Check that Lando is installed and in your PATH.';
+                $this->dispatch('landodev-scroll-terminal');
                 $this->notifyError('Action failed to start.');
             }
 
             return;
         }
 
-        $content = file_get_contents($logFile);
+        $content = LogContentUtf8::forLivewire((string) file_get_contents($logFile));
         $this->actionOutput = $content;
+        $this->dispatch('landodev-scroll-terminal');
 
         if ($elapsed > 600) {
             $this->actionRunning = false;
@@ -540,9 +545,10 @@ class SiteDashboard extends Component
         $this->site->update(['log_file' => $logFile]);
 
         $platform = app(PlatformDetector::class);
+        $wrapped = $platform->wrapCommandWithLogRedirect($command, $logFile);
 
         ChildProcess::start(
-            cmd: [$platform->shellWrapper(), $platform->shellFlag(), $command." > '{$logFile}' 2>&1"],
+            cmd: [$platform->shellWrapper(), $platform->shellFlag(), $wrapped],
             alias: 'action-site-'.$this->site->id.'-'.uniqid(),
         );
     }

@@ -9,10 +9,14 @@ use App\Models\CommandLog;
 use App\Models\Site;
 use App\Services\PlatformDetector;
 use App\Support\CommandLogErrorDetector;
+use App\Support\LogContentUtf8;
 use Native\Laravel\Facades\ChildProcess;
 
 trait WithCommandExecution
 {
+    /** Keep snapshot size bounded; full logs remain in storage/logs. */
+    private const LIVEWIRE_OUTPUT_CAP_BYTES = 100_000;
+
     public int $currentStep = 0;
 
     public int $totalSteps = 0;
@@ -40,6 +44,8 @@ trait WithCommandExecution
         $this->executionStartedAt = microtime(true);
         $this->steps = array_map(fn ($s) => [
             'label' => $s['label'],
+            'hint' => $s['hint'] ?? null,
+            'timeout' => $s['timeout'] ?? 600,
             'status' => 'pending',
             'output' => '',
         ], $stepDefinitions);
@@ -89,8 +95,10 @@ trait WithCommandExecution
         $shell = app(PlatformDetector::class)->shellWrapper();
         $flag = app(PlatformDetector::class)->shellFlag();
 
+        $wrapped = app(PlatformDetector::class)->wrapCommandWithLogRedirect($command, $logFile);
+
         ChildProcess::start(
-            cmd: [$shell, $flag, $command." > '{$logFile}' 2>&1"],
+            cmd: [$shell, $flag, $wrapped],
             alias: $alias,
         );
     }
@@ -118,13 +126,16 @@ trait WithCommandExecution
             return;
         }
 
-        $content = file_get_contents($logFile);
-        $this->terminalOutput = $this->completedOutput.$content;
+        $content = LogContentUtf8::forLivewire((string) file_get_contents($logFile));
+        $this->terminalOutput = $this->capLivewireOutput($this->completedOutput.$content);
+        $this->dispatch('landodev-scroll-terminal');
         $this->steps[$this->currentStep]['output'] = $this->tailLines($content, 10);
 
-        // Overall timeout for a single step (10 minutes for lando start/rebuild)
-        if ($elapsed > 600) {
-            $this->failCurrentStep($site, 'Command timed out after 10 minutes.');
+        // Overall timeout for a single step; default 10 min, but dump steps may override higher.
+        $stepTimeout = $this->steps[$this->currentStep]['timeout'] ?? 600;
+        if ($elapsed > $stepTimeout) {
+            $timeoutMinutes = (int) round($stepTimeout / 60);
+            $this->failCurrentStep($site, "Command timed out after {$timeoutMinutes} minutes.");
 
             return;
         }
@@ -147,6 +158,7 @@ trait WithCommandExecution
             // Accumulate this step's output for the full log
             $stepLabel = $this->steps[$this->currentStep]['label'] ?? '';
             $this->completedOutput .= "\n--- [{$stepLabel}] ---\n".$content."\n";
+            $this->completedOutput = $this->capLivewireOutput($this->completedOutput);
 
             CommandLog::where('site_id', $site->id)
                 ->where('step_number', $this->currentStep)
@@ -200,6 +212,16 @@ trait WithCommandExecution
         $slice = array_slice($allLines, -$lines);
 
         return implode("\n", $slice);
+    }
+
+    private function capLivewireOutput(string $buffer): string
+    {
+        if (strlen($buffer) <= self::LIVEWIRE_OUTPUT_CAP_BYTES) {
+            return $buffer;
+        }
+
+        return "[Earlier output truncated — see storage/logs for full step logs.]\n\n"
+            .substr($buffer, -self::LIVEWIRE_OUTPUT_CAP_BYTES);
     }
 
     abstract protected function getSite(): ?Site;

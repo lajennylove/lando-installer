@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Livewire\Concerns\WithNotifications;
 use App\Models\RemoteSite;
 use App\Services\ApplicationDatabaseReset;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -37,7 +38,8 @@ class Settings extends Component
 
     public string $remoteDomain = '';
 
-    public string $localDomain = '';
+    /** Subdomain part only; stored as https://{slug}.lndo.site in local_domain. */
+    public string $localSiteName = '';
 
     public string $sshServerIp = '';
 
@@ -57,6 +59,10 @@ class Settings extends Component
     public string $themeName = '';
 
     public string $repoUrl = '';
+
+    public bool $installComposerDependencies = false;
+
+    public bool $installNodeDependencies = false;
 
     public bool $showDeleteModal = false;
 
@@ -157,7 +163,7 @@ class Settings extends Component
 
         $this->editingRemoteSiteId = $id;
         $this->remoteDomain = $remote->remote_domain;
-        $this->localDomain = $remote->local_domain ?? '';
+        $this->localSiteName = $this->localSiteNameFromStored($remote->local_domain);
         $this->sshServerIp = $remote->ssh_server_ip;
         $this->sshUser = $remote->ssh_user;
         $this->sshPassword = $remote->ssh_password ?? '';
@@ -167,6 +173,8 @@ class Settings extends Component
         $this->dbPassword = $remote->db_password ?? '';
         $this->themeName = $remote->theme_name ?? '';
         $this->repoUrl = $remote->repo_url ?? '';
+        $this->installComposerDependencies = (bool) $remote->install_composer_dependencies;
+        $this->installNodeDependencies = (bool) $remote->install_node_dependencies;
         $this->showRemoteSiteForm = true;
     }
 
@@ -174,6 +182,7 @@ class Settings extends Component
     {
         $this->validate([
             'remoteDomain' => 'required|url',
+            'localSiteName' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9\s\-]+$/'],
             'sshServerIp' => 'required',
             'sshUser' => 'required',
             'remotePath' => 'required|string|max:512',
@@ -181,9 +190,14 @@ class Settings extends Component
             'dbUser' => 'required',
         ]);
 
+        $repoUrl = $this->repoUrl ?: null;
+
+        $localSlug = Str::slug(trim($this->localSiteName));
+        $localDomain = $localSlug !== '' ? "https://{$localSlug}.lndo.site" : null;
+
         $data = [
             'remote_domain' => $this->remoteDomain,
-            'local_domain' => $this->localDomain ?: null,
+            'local_domain' => $localDomain,
             'ssh_server_ip' => $this->sshServerIp,
             'ssh_user' => $this->sshUser,
             'ssh_password' => $this->sshPassword ?: null,
@@ -192,7 +206,9 @@ class Settings extends Component
             'db_user' => $this->dbUser,
             'db_password' => $this->dbPassword ?: null,
             'theme_name' => $this->themeName ?: null,
-            'repo_url' => $this->repoUrl ?: null,
+            'repo_url' => $repoUrl,
+            'install_composer_dependencies' => $repoUrl && $this->installComposerDependencies,
+            'install_node_dependencies' => $repoUrl && $this->installNodeDependencies,
         ];
 
         if ($this->editingRemoteSiteId) {
@@ -230,11 +246,31 @@ class Settings extends Component
         $this->resetRemoteForm();
     }
 
+    /**
+     * Populate the short-name field when editing a row that stores a full Lando URL.
+     */
+    private function localSiteNameFromStored(?string $localDomain): string
+    {
+        if ($localDomain === null || trim($localDomain) === '') {
+            return '';
+        }
+
+        $trimmed = rtrim(trim($localDomain), '/');
+        if (preg_match('#^https?://([^/]+)$#i', $trimmed, $m) === 1) {
+            $host = $m[1];
+            if (preg_match('#^(.+)\.lndo\.site$#i', $host, $hm) === 1) {
+                return $hm[1];
+            }
+        }
+
+        return $trimmed;
+    }
+
     private function resetRemoteForm(): void
     {
         $this->editingRemoteSiteId = null;
         $this->remoteDomain = '';
-        $this->localDomain = '';
+        $this->localSiteName = '';
         $this->sshServerIp = '';
         $this->sshUser = '';
         $this->sshPassword = '';
@@ -244,6 +280,8 @@ class Settings extends Component
         $this->dbPassword = '';
         $this->themeName = '';
         $this->repoUrl = '';
+        $this->installComposerDependencies = false;
+        $this->installNodeDependencies = false;
     }
 
     public function resetApplicationData(): void
