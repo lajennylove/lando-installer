@@ -66,9 +66,9 @@
         </form>
     @else
         {{-- Progress View --}}
-        <div class="mt-8 space-y-6">
+        <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 lg:items-start [min-height:calc(100dvh-10rem)]">
             {{-- Step Progress --}}
-            <div class="space-y-2">
+            <div class="space-y-2 min-w-0 lg:col-span-1 lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:pr-1">
                 @foreach($steps as $index => $step)
                     <div class="flex items-center gap-3 p-3 rounded-lg {{ match($step['status']) {
                         'completed' => 'bg-green-50 dark:bg-green-900/20',
@@ -103,26 +103,28 @@
             </div>
 
             {{-- Terminal Output --}}
-            @if($terminalOutput)
-                <div>
-                    <flux:heading size="sm" class="mb-2">Output</flux:heading>
-                    <div
-                        id="terminal-output"
-                        x-data="{ autoScroll: true }"
-                        wire:key="new-site-terminal"
-                        @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
-                        @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
-                        class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg h-72 overflow-y-auto"
-                    >
+            <div class="min-w-0 flex flex-col min-h-0 lg:col-span-2 lg:sticky lg:top-6 lg:self-start">
+                <flux:heading size="sm" class="mb-2 shrink-0">Output</flux:heading>
+                <div
+                    id="terminal-output"
+                    x-data="{ autoScroll: true }"
+                    wire:key="new-site-terminal"
+                    @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
+                    @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
+                    class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg overflow-y-auto min-h-[12rem] h-[min(24rem,calc(100dvh-16rem))] lg:min-h-[calc(100dvh-12rem)] lg:h-[calc(100dvh-12rem)] lg:max-h-[calc(100dvh-12rem)]"
+                >
+                    @if($terminalOutput !== '')
                         @foreach(explode("\n", $terminalOutput) as $line)
                             <span class="terminal-line">{!! $line === '' ? '&nbsp;' : \App\Support\AnsiToHtml::lineToHtml($line) !!}</span>
                         @endforeach
-                    </div>
+                    @else
+                        <span class="text-zinc-500 not-italic">Output from each step will stream here.</span>
+                    @endif
                 </div>
-            @endif
+            </div>
 
             {{-- Actions --}}
-            <div class="flex items-center gap-3">
+            <div class="col-span-full lg:col-span-3 flex flex-wrap items-center gap-3">
                 @if($executionFailed)
                     <flux:button wire:click="retryFromFailedStep" variant="primary" icon="arrow-path">
                         Retry Failed Step

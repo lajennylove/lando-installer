@@ -109,10 +109,15 @@ class SiteDashboard extends Component
                     'status' => $t['status'] ?? '',
                 ], $themes);
 
-                // Update active theme from WP
+                // Update active theme from WP; persist to DB on first detection so the
+                // theme screenshot is available without requiring a manual theme switch.
                 foreach ($this->availableThemes as $theme) {
                     if ($theme['status'] === 'active') {
                         $this->activeTheme = $theme['name'];
+                        if (! $this->site->theme_name) {
+                            $this->site->update(['theme_name' => $theme['name']]);
+                            $this->site->refresh();
+                        }
                         break;
                     }
                 }
@@ -555,11 +560,15 @@ class SiteDashboard extends Component
 
     public function getThemeScreenshotProperty(): ?string
     {
-        if (! $this->site->theme_name || ! $this->site->path) {
+        // Use the DB value when available; fall back to the live in-memory activeTheme
+        // for new sites that haven't had theme_name persisted yet.
+        $themeName = $this->site->theme_name ?: $this->activeTheme;
+
+        if (! $themeName || ! $this->site->path) {
             return null;
         }
 
-        $themePath = $this->site->path.'/wp/wp-content/themes/'.$this->site->theme_name;
+        $themePath = $this->site->path.'/wp/wp-content/themes/'.$themeName;
 
         foreach (['screenshot.png', 'screenshot.jpg', 'screenshot.webp'] as $file) {
             $fullPath = $themePath.'/'.$file;
