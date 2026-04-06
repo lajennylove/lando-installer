@@ -15,8 +15,11 @@ return [
     'db_type' => 'mariadb',
     'db_version' => '10.6',
     'db_versions' => ['11.7', '11.4', '10.11', '10.6', '10.5'],
-    'redis_version' => '7.0',
-    'redis_versions' => ['7.0', '6.2', '6.0'],
+    // Lando v3 on Windows does not support Redis 7.2 or 7.4. macOS/Linux support up to 7.4.
+    'redis_version' => PHP_OS_FAMILY === 'Windows' ? '7.0' : '7.4',
+    'redis_versions' => PHP_OS_FAMILY === 'Windows'
+        ? ['7.0', '6.2', '6.0']
+        : ['7.4', '7.2', '7.0', '6.2', '6.0'],
     // Host path for new Lando sites; default ~/code/sites/ is resolved in PlatformDetector (cross-platform).
     'code_path' => env('LANDODEV_CODE_PATH', null),
     'db_name' => 'wordpress',
