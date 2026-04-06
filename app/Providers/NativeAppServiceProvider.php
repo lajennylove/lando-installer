@@ -12,6 +12,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     {
         Window::open()
             ->title(config('app.name', 'LandoDEV'))
+            ->url(url('/'))
             ->width(1600)
             ->height(800)
             ->minWidth(1400)

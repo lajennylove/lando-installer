@@ -55,6 +55,19 @@
         </div>
     </div>
 
+    {{-- System Dependencies --}}
+    <div class="mt-10">
+        <div class="flex items-center justify-between">
+            <div>
+                <flux:heading size="lg">System Dependencies</flux:heading>
+                <flux:subheading class="mt-1">Lando and Docker are required to run local sites.</flux:subheading>
+            </div>
+            <flux:button href="{{ route('setup') }}" variant="primary" icon="wrench-screwdriver">
+                Manage Dependencies
+            </flux:button>
+        </div>
+    </div>
+
     {{-- Application data (SQLite) — sidebar reads sites table; deleting folders/Docker does not remove rows --}}
     <div class="mt-10">
         <flux:heading size="lg">Application data</flux:heading>

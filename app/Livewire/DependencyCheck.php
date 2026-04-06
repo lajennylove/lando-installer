@@ -100,11 +100,11 @@ class DependencyCheck extends Component
             return;
         }
 
-        // Show latest log output to give the user feedback.
+        // Read latest log output and dispatch scroll event for the terminal.
         if ($this->installLogFile && file_exists($this->installLogFile)) {
             $raw = file_get_contents($this->installLogFile) ?: '';
-            // Keep last 3000 chars to avoid snapshot bloat.
-            $this->installOutput = mb_substr($raw, -3000);
+            $this->installOutput = mb_substr($raw, -6000);
+            $this->dispatch('landodev-scroll-terminal');
         }
 
         $this->checkDependencies();
@@ -114,6 +114,7 @@ class DependencyCheck extends Component
             $this->installing = false;
             $this->installingDep = '';
             $this->installLogFile = '';
+            $this->dispatch('landodev-scroll-terminal');
             $this->notifySuccess("{$dep['label']} installed successfully!");
         }
     }
