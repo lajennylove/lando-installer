@@ -35,16 +35,20 @@ class DependencyInstaller
         return match ($this->platform->os()) {
             // Bootstrap Homebrew first if absent, then install Docker Desktop cask.
             'macos' => $this->withBrewBootstrap('brew install --cask docker'),
-            // Try winget first (Windows 10 1709+ / Windows 11); fall back to direct download
-            // for older machines where winget may not be installed.
-            'windows' => implode(' ; ', [
-                'if (Get-Command winget -ErrorAction SilentlyContinue)',
-                '{ winget install Docker.DockerDesktop --accept-package-agreements --accept-source-agreements }',
-                'else',
-                '{ $f="$env:TEMP\DockerInstaller.exe"',
-                '  Invoke-WebRequest -Uri "https://desktop.docker.com/win/main/amd64/Docker Desktop Installer.exe" -OutFile $f',
-                '  Start-Process $f -ArgumentList "install","--quiet" -Wait }',
+
+            // Official documented method from https://docs.docker.com/desktop/setup/install/windows-install/
+            // PowerShell: detect arch, download installer, run silently.
+            // --quiet          suppresses UI
+            // --accept-license pre-accepts Docker Subscription Service Agreement
+            // --backend=wsl-2  default backend; avoids Hyper-V prompt
+            'windows' => implode('; ', [
+                '$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }',
+                '$url = "https://desktop.docker.com/win/main/$arch/Docker%20Desktop%20Installer.exe"',
+                '$f = "$env:TEMP\DockerDesktopInstaller.exe"',
+                'Invoke-WebRequest -Uri $url -OutFile $f -UseBasicParsing',
+                'Start-Process $f -Wait -ArgumentList @("install", "--quiet", "--accept-license", "--backend=wsl-2")',
             ]),
+
             // get.docker.com auto-detects the distro (apt, yum, dnf, zypper, etc.).
             default => 'curl -fsSL https://get.docker.com | sh',
         };

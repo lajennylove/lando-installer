@@ -56,18 +56,17 @@ class DependencyChecker
         }
 
         if ($this->platform->isWindows()) {
-            $candidates = [
-                'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe',
-                'C:\\ProgramData\\DockerDesktop\\version-bin\\docker.exe',
-            ];
-            foreach ($candidates as $path) {
-                if (file_exists($path)) {
-                    return true;
-                }
-            }
+            // Official install location per Docker Desktop Windows docs.
+            return file_exists($this->windowsDockerExe());
         }
 
         return false;
+    }
+
+    /** Default docker.exe path for Docker Desktop on Windows. */
+    private function windowsDockerExe(): string
+    {
+        return 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe';
     }
 
     public function isOrbStackInstalled(): bool
@@ -85,7 +84,12 @@ class DependencyChecker
 
     public function getDockerVersion(): ?string
     {
-        return $this->getCommandOutput('docker --version');
+        // On Windows use the full path in case the child process PATH is frozen.
+        $cmd = $this->platform->isWindows()
+            ? '"'.$this->windowsDockerExe().'" --version'
+            : 'docker --version';
+
+        return $this->getCommandOutput($cmd);
     }
 
     public function getOrbStackVersion(): ?string
