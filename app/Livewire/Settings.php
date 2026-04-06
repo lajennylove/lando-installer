@@ -97,7 +97,14 @@ class Settings extends Component
         $this->appearance = $value;
         UserPreference::set('appearance', $value);
 
-        $this->js('window.Flux && window.Flux.applyAppearance('.json_encode($value).')');
+        // Directly toggle the class — no localStorage, no window.Flux dependency.
+        if ($value === 'dark') {
+            $this->js("document.documentElement.classList.add('dark')");
+        } elseif ($value === 'light') {
+            $this->js("document.documentElement.classList.remove('dark')");
+        } else {
+            $this->js("window.matchMedia('(prefers-color-scheme: dark)').matches ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')");
+        }
     }
 
     public function saveDefaultPhpVersion(string $version): void

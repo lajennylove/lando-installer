@@ -1,11 +1,10 @@
-@props([
-    'title' => null,
-])
 @php
     $documentTitle = filled($title) ? $title : config('app.name', 'LandoDEV');
+    $savedAppearance = \App\Models\UserPreference::get('appearance', 'system');
 @endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+      class="{{ $savedAppearance === 'dark' ? 'dark' : '' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -24,17 +23,12 @@
 
     @fluxAppearance
 
-    @php $savedAppearance = \App\Models\UserPreference::get('appearance', 'system'); @endphp
-    <script>
-        (function () {
-            var saved = @json($savedAppearance);
-            if (saved === 'dark') {
-                document.documentElement.classList.add('dark');
-            } else if (saved === 'light') {
-                document.documentElement.classList.remove('dark');
-            }
-        })();
-    </script>
+    {{-- Override @fluxAppearance (which reads localStorage) with our DB-stored preference --}}
+    @if($savedAppearance === 'dark')
+        <script>document.documentElement.classList.add('dark');</script>
+    @elseif($savedAppearance === 'light')
+        <script>document.documentElement.classList.remove('dark');</script>
+    @endif
 </head>
 
 <body class="min-h-screen bg-white dark:bg-zinc-800">
