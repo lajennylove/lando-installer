@@ -33,7 +33,6 @@
             } else if (saved === 'light') {
                 document.documentElement.classList.remove('dark');
             }
-            // 'system' is already handled by @fluxAppearance above via matchMedia
         })();
     </script>
 </head>
@@ -94,7 +93,7 @@
         }
     });
 
-    document.addEventListener('appearance-changed', function (e) {
+    window.addEventListener('appearance-changed', function (e) {
         if (window.Flux && e.detail && e.detail.appearance) {
             window.Flux.applyAppearance(e.detail.appearance);
         }
