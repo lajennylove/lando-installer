@@ -56,12 +56,15 @@
 
         @if($installing)
             <div class="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 mb-2">
                     <flux:icon name="arrow-path" class="w-4 h-4 animate-spin text-blue-600" />
                     <flux:text class="text-sm text-blue-700 dark:text-blue-300">
                         Installing {{ $dependencies[$installingDep]['label'] ?? '' }}... This may take a few minutes.
                     </flux:text>
                 </div>
+                @if($installOutput)
+                    <pre class="mt-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-900 dark:bg-zinc-950 rounded p-2 overflow-auto max-h-40 font-mono whitespace-pre-wrap break-all">{{ $installOutput }}</pre>
+                @endif
             </div>
         @endif
 

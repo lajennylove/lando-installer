@@ -25,6 +25,8 @@ class DependencyCheck extends Component
 
     public string $installOutput = '';
 
+    public string $installLogFile = '';
+
     public function mount(): void
     {
         $this->checkDependencies();
@@ -71,21 +73,23 @@ class DependencyCheck extends Component
         $this->installing = true;
         $this->installingDep = $dependency;
         $this->installOutput = '';
+        // Stable name (no time()) so pollInstallStatus can read the same file.
+        $this->installLogFile = storage_path("logs/install_{$dependency}.log");
+
+        @unlink($this->installLogFile);
 
         $command = $installer->getInstallCommand($dependency);
-        $logFile = storage_path("logs/install_{$dependency}_".time().'.log');
 
-        // Lando (iex/irm) and winget commands are PowerShell syntax on Windows;
-        // cmd.exe cannot run them. Use powershell for all Windows dep installs.
         if ($platform->isWindows()) {
-            [$shell, $flag] = $platform->powershellArgs();
+            // Spread all PS args; the log redirect is PowerShell-native syntax.
+            $shellArgs = $platform->powershellArgs();
+            $cmd = [...$shellArgs, "{$command} *> '".addslashes($this->installLogFile)."'"];
         } else {
-            $shell = $platform->shellWrapper();
-            $flag = $platform->shellFlag();
+            $cmd = [$platform->shellWrapper(), $platform->shellFlag(), "{$command} > ".escapeshellarg($this->installLogFile).' 2>&1'];
         }
 
         ChildProcess::start(
-            cmd: [$shell, $flag, $command." > {$logFile} 2>&1"],
+            cmd: $cmd,
             alias: "install-{$dependency}",
         );
     }
@@ -96,12 +100,20 @@ class DependencyCheck extends Component
             return;
         }
 
+        // Show latest log output to give the user feedback.
+        if ($this->installLogFile && file_exists($this->installLogFile)) {
+            $raw = file_get_contents($this->installLogFile) ?: '';
+            // Keep last 3000 chars to avoid snapshot bloat.
+            $this->installOutput = mb_substr($raw, -3000);
+        }
+
         $this->checkDependencies();
 
         $dep = $this->dependencies[$this->installingDep] ?? null;
         if ($dep && $dep['installed']) {
             $this->installing = false;
             $this->installingDep = '';
+            $this->installLogFile = '';
             $this->notifySuccess("{$dep['label']} installed successfully!");
         }
     }

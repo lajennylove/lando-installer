@@ -83,15 +83,17 @@ class PlatformDetector
     }
 
     /**
-     * Shell + flag pair for running PowerShell commands on Windows.
-     * The Lando and winget install commands are PowerShell syntax and must NOT
-     * run through cmd.exe — they need powershell -ExecutionPolicy Bypass -Command.
+     * Full argument list for running a PowerShell command on Windows.
+     * Each item must be a separate element — passing combined flags as one
+     * string causes Windows spawn() to treat them as a single malformed arg.
      *
-     * @return array{0: string, 1: string}
+     * Usage: ChildProcess::start(cmd: [...$platform->powershellArgs(), $command], ...)
+     *
+     * @return array<string>
      */
     public function powershellArgs(): array
     {
-        return ['powershell', '-ExecutionPolicy Bypass -Command'];
+        return ['powershell', '-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command'];
     }
 
     /**
