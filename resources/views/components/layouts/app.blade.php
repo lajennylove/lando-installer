@@ -79,6 +79,13 @@
 
 @fluxScripts
 
+{{-- flux.min.js registers Alpine.effect(()=>t(Flux.appearance)) which re-applies
+     system/OS dark after our <head> script ran. Override it here by writing directly
+     into the Alpine reactive store — this triggers the same effect with the correct value. --}}
+@if($savedAppearance !== 'system')
+<script>if (window.Flux) window.Flux.appearance = @json($savedAppearance);</script>
+@endif
+
 <script>
     document.addEventListener('livewire:navigated', function () {
         var t = document.title && document.title.trim();
