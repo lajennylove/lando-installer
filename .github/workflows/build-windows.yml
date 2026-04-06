@@ -38,7 +38,11 @@ jobs:
         run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Install Node dependencies
-        run: npm ci
+        # npm ci fails to install platform-specific optional packages (e.g.
+        # @rollup/rollup-win32-x64-msvc) when the lock file was generated on a
+        # different OS. Use npm install so optional deps are resolved for the
+        # current platform. See https://github.com/npm/cli/issues/4828
+        run: npm install
 
       - name: Prepare .env
         shell: pwsh
