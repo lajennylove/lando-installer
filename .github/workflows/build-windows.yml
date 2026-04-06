@@ -12,6 +12,9 @@ on:
           - x64
           - arm64
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: windows-latest
@@ -72,11 +75,22 @@ jobs:
           APP_ENV: production
           APP_DEBUG: 'false'
           APP_URL: http://localhost
-        run: php artisan native:build win ${{ inputs.arch }}
+        run: php artisan native:build win ${{ inputs.arch }} -v
+
+      - name: Find build output
+        shell: pwsh
+        run: |
+          Write-Host "=== Searching for installer files ==="
+          Get-ChildItem -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object FullName, Length
+          Get-ChildItem -Recurse -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object FullName, Length
+          Write-Host "=== dist/ contents (if exists) ==="
+          if (Test-Path dist) { Get-ChildItem -Recurse dist | Select-Object FullName }
+          else { Write-Host "dist/ does not exist" }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: LandoDEV-windows-${{ inputs.arch }}
           path: dist/
+          if-no-files-found: warn
           retention-days: 7
