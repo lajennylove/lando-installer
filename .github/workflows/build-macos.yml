@@ -1,0 +1,93 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        required: true
+        default: 'arm64'
+        type: choice
+        options:
+          - arm64
+          - x64
+      version:
+        description: 'App version (must be semver x.y.z)'
+        required: true
+        default: '1.0.0'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ${{ inputs.arch == 'arm64' && 'macos-latest' || 'macos-13' }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo, pdo_sqlite, sqlite3, zip, bcmath, curl, fileinfo
+          tools: composer:v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install Node dependencies
+        # Delete package-lock.json so npm resolves platform-specific optional
+        # packages (e.g. @rollup/rollup-darwin-arm64) fresh for this runner.
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan config:clear
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Create SQLite database
+        run: |
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Build macOS app
+        env:
+          NATIVEPHP_APP_ID: com.landodev.app
+          NATIVEPHP_APP_VERSION: ${{ inputs.version }}
+          NATIVEPHP_UPDATER_ENABLED: 'false'
+          # Code signing is skipped for test builds. Set these secrets for
+          # production-signed releases:
+          # NATIVEPHP_APPLE_ID, NATIVEPHP_APPLE_ID_PASS, NATIVEPHP_APPLE_TEAM_ID
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: http://localhost
+        run: php artisan native:build mac ${{ inputs.arch }} -v
+
+      - name: Find build output
+        run: |
+          echo "=== Searching for .dmg / .zip files ==="
+          find . -name "*.dmg" -o -name "*.zip" 2>/dev/null | grep -v node_modules | grep -v vendor || true
+          echo "=== dist/ contents ==="
+          ls -lh dist/ 2>/dev/null || echo "dist/ does not exist"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LandoDEV-${{ inputs.version }}-macos-${{ inputs.arch }}
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 7

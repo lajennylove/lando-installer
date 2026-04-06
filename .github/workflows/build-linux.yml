@@ -1,0 +1,106 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        required: true
+        default: 'x64'
+        type: choice
+        options:
+          - x64
+          - arm64
+      version:
+        description: 'App version (must be semver x.y.z)'
+        required: true
+        default: '1.0.0'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        # electron-builder requires these libs to package Electron on Linux
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libnotify-dev \
+            libnss3 \
+            libxss1 \
+            libxtst6 \
+            xauth \
+            xvfb \
+            rpm \
+            fakeroot \
+            dpkg
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo, pdo_sqlite, sqlite3, zip, bcmath, curl, fileinfo
+          tools: composer:v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install Node dependencies
+        # Delete package-lock.json so npm resolves platform-specific optional
+        # packages (e.g. @rollup/rollup-linux-x64-gnu) fresh for this runner.
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan config:clear
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Create SQLite database
+        run: |
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Build Linux app
+        env:
+          NATIVEPHP_APP_ID: com.landodev.app
+          NATIVEPHP_APP_VERSION: ${{ inputs.version }}
+          NATIVEPHP_UPDATER_ENABLED: 'false'
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: http://localhost
+        run: php artisan native:build linux ${{ inputs.arch }} -v
+
+      - name: Find build output
+        run: |
+          echo "=== Searching for .AppImage / .deb / .rpm files ==="
+          find . \( -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) 2>/dev/null | grep -v node_modules | grep -v vendor || true
+          echo "=== dist/ contents ==="
+          ls -lh dist/ 2>/dev/null || echo "dist/ does not exist"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LandoDEV-${{ inputs.version }}-linux-${{ inputs.arch }}
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 7
