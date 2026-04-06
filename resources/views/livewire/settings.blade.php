@@ -1,11 +1,11 @@
 <div>
     <flux:heading size="xl">Settings</flux:heading>
-    <flux:subheading class="mt-1">Configure LandoDEV defaults and remote sites</flux:subheading>
+    <flux:subheading class="mt-1">Configure Lando Studio defaults and remote sites</flux:subheading>
 
     {{-- Appearance Section --}}
     <div class="mt-8">
         <flux:heading size="lg">Appearance</flux:heading>
-        <flux:subheading class="mt-1">Choose how LandoDEV looks on your screen</flux:subheading>
+        <flux:subheading class="mt-1">Choose how Lando Studio looks on your screen</flux:subheading>
 
         <div class="mt-4 flex gap-3">
             {{-- Auto --}}

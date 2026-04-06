@@ -2,6 +2,7 @@
 
 use App\Models\Site;
 use App\Services\ApplicationDatabaseReset;
+use App\Services\DependencyChecker;
 use App\Services\WpConfigGenerator;
 use App\Support\DatabaseTablePrefixDetector;
 use App\Support\MysqlDumpTablePrefixDetector;
@@ -92,7 +93,7 @@ Artisan::command('lando-dev:clone-wp-config {path : Absolute site root (contains
         $dbUser = (string) config('lando_dev.defaults.db_user');
         $dbPass = (string) config('lando_dev.defaults.db_password');
         $dbHost = (string) config('lando_dev.defaults.db_host');
-        $lando = app(\App\Services\DependencyChecker::class)->getLandoPath() ?? 'lando';
+        $lando = app(DependencyChecker::class)->getLandoPath() ?? 'lando';
 
         $wpConfigArgs = implode(' ', [
             '--dbname='.escapeshellarg($dbName),
@@ -106,7 +107,7 @@ Artisan::command('lando-dev:clone-wp-config {path : Absolute site root (contains
         ]);
 
         $log->info('attempting lando wp config create', ['prefix' => $prefix]);
-        $result = \Illuminate\Support\Facades\Process::path($path)
+        $result = Process::path($path)
             ->timeout(60)
             ->run("{$lando} wp config create {$wpConfigArgs}");
 

@@ -11,7 +11,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     public function boot(): void
     {
         Window::open()
-            ->title(config('app.name', 'LandoDEV'))
+            ->title(config('app.name', 'Lando Studio'))
             ->url(url('/'))
             ->width(1600)
             ->height(800)

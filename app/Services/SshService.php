@@ -94,7 +94,7 @@ class SshService
         // the only thing keeping the log alive during both phases. 20s gives a 10s safety margin
         // vs the 5s margin of the previous 25s interval — enough headroom under CPU/IO load.
         return 'rm -f '.$localSql.' '.$localGz
-            .'; while sleep 20; do echo "[LandoDEV] Database dump in progress $(date -u +%H:%M:%S)"; done & LANDODEV_HB=$!'
+            .'; while sleep 20; do echo "[Lando Studio] Database dump in progress $(date -u +%H:%M:%S)"; done & LANDODEV_HB=$!'
             .' && trap '.$trapCleanup.' EXIT'
             .' && set -o pipefail && '.$sshpassSsh.' '.$target.' '.$remoteArg.' > '.$localSql
             .' && gzip -c '.$localSql.' > '.$localGz.' && rm -f '.$localSql

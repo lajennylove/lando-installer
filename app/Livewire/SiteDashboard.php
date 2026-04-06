@@ -16,7 +16,7 @@ use Livewire\Component;
 use Native\Laravel\Facades\ChildProcess;
 
 #[Layout('components.layouts.app')]
-#[Title('LandoDEV')]
+#[Title('Lando Studio')]
 class SiteDashboard extends Component
 {
     use WithNotifications;

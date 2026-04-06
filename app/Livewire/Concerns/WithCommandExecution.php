@@ -94,7 +94,7 @@ trait WithCommandExecution
 
         // Pre-write the command so the log file exists immediately and the terminal
         // shows what is being attempted even if the child process fails to start.
-        file_put_contents($logFile, "[LandoDEV] Running: {$command}\n");
+        file_put_contents($logFile, "[Lando Studio] Running: {$command}\n");
 
         $platform = app(PlatformDetector::class);
         $wrapped = $platform->wrapCommandWithLogRedirect($command, $logFile);
@@ -114,7 +114,7 @@ trait WithCommandExecution
         } catch (\Throwable $e) {
             // NativePHP bridge (localhost:4002) unreachable — log and surface the error.
             $msg = 'ChildProcess::start() failed: '.$e->getMessage();
-            file_put_contents($logFile, "\n[LandoDEV ERROR] {$msg}\n", FILE_APPEND);
+            file_put_contents($logFile, "\n[Lando Studio ERROR] {$msg}\n", FILE_APPEND);
             $this->failCurrentStep($site, $msg);
         }
     }

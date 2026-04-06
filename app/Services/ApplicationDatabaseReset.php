@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
 final class ApplicationDatabaseReset
 {
     /**
-     * Connections that may hold LandoDEV data. NativePHP uses {@see 'nativephp'}; Artisan often
+     * Connections that may hold Lando Studio data. NativePHP uses {@see 'nativephp'}; Artisan often
      * uses {@see 'sqlite'}. Those connections may point at the same file after aligning defaults
      * (see {@see config('database.connections.sqlite.database')}). Wiping only one connection can
      * still miss rows if another path exists (e.g. Application Support in a packaged app).

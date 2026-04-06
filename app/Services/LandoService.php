@@ -92,7 +92,7 @@ class LandoService
         // Wrap with a heartbeat so the 30s log-idle timer does not fire prematurely.
         return $this->platform->isWindows()
             ? $cmd
-            : $this->withHeartbeat('[LandoDEV] Domain replacement in progress', $cmd);
+            : $this->withHeartbeat('[Lando Studio] Domain replacement in progress', $cmd);
     }
 
     public function wpThemeActivate(string $path, string $themeName): string
@@ -261,7 +261,7 @@ class LandoService
 
         return $this->platform->isWindows()
             ? $cmd
-            : $this->withHeartbeat('[LandoDEV] Domain replacement in progress', $cmd);
+            : $this->withHeartbeat('[Lando Studio] Domain replacement in progress', $cmd);
     }
 
     private function withHeartbeat(string $message, string $command): string

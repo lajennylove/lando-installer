@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "landodev/app",
     "type": "project",
-    "description": "LandoDEV - Local WordPress Development Manager powered by Lando",
+    "description": "Lando Studio - Local WordPress Development Manager powered by Lando",
     "keywords": ["laravel", "nativephp", "lando", "wordpress"],
     "license": "MIT",
     "require": {

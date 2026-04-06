@@ -4,8 +4,8 @@
         {{-- Left column: dependency list --}}
         <div class="flex flex-col">
             <div class="text-center mb-6">
-                <img src="{{ asset('assets/rocket.png') }}" alt="LandoDEV" class="mx-auto mb-4 size-[60px] object-contain" />
-                <flux:heading size="xl">Welcome to LandoDEV</flux:heading>
+                <img src="{{ asset('assets/rocket.png') }}" alt="Lando Studio" class="mx-auto mb-4 size-[60px] object-contain" />
+                <flux:heading size="xl">Welcome to Lando Studio</flux:heading>
                 <flux:subheading class="mt-2">Let's make sure you have everything you need</flux:subheading>
             </div>
 
@@ -60,7 +60,7 @@
             <div class="mt-auto pt-6 flex justify-end">
                 @if($this->allRequiredMet())
                     <flux:button href="{{ route('home') }}" variant="primary" icon-trailing="arrow-right">
-                        Continue to LandoDEV
+                        Continue to Lando Studio
                     </flux:button>
                 @else
                     <flux:button disabled variant="primary" icon-trailing="arrow-right">

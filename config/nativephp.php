@@ -13,7 +13,7 @@ return [
 
     'copyright' => env('NATIVEPHP_APP_COPYRIGHT'),
 
-    'description' => env('NATIVEPHP_APP_DESCRIPTION', 'LandoDEV - Local WordPress Development Manager'),
+    'description' => env('NATIVEPHP_APP_DESCRIPTION', 'Lando Studio - Local WordPress Development Manager'),
 
     'website' => env('NATIVEPHP_APP_WEBSITE', 'https://nativephp.com'),
 

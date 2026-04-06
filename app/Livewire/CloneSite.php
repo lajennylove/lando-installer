@@ -17,7 +17,7 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
-#[Title('LandoDEV')]
+#[Title('Lando Studio')]
 class CloneSite extends Component
 {
     use WithCommandExecution;

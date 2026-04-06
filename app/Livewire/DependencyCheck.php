@@ -12,7 +12,7 @@ use Livewire\Component;
 use Native\Laravel\Facades\ChildProcess;
 
 #[Layout('components.layouts.app')]
-#[Title('LandoDEV')]
+#[Title('Lando Studio')]
 class DependencyCheck extends Component
 {
     use WithNotifications;
@@ -81,7 +81,7 @@ class DependencyCheck extends Component
         $command = $installer->getInstallCommand($dependency);
 
         // Pre-write so the log file exists before the process starts.
-        file_put_contents($this->installLogFile, "[LandoDEV] Installing {$dependency}...\n[LandoDEV] Command: {$command}\n");
+        file_put_contents($this->installLogFile, "[Lando Studio] Installing {$dependency}...\n[Lando Studio] Command: {$command}\n");
 
         if ($platform->isWindows()) {
             // Spread all PS args; the log redirect is PowerShell-native syntax.
@@ -98,8 +98,8 @@ class DependencyCheck extends Component
             );
         } catch (\Throwable $e) {
             $this->installing = false;
-            $this->installOutput = '[LandoDEV ERROR] Failed to start install process: '.$e->getMessage()."\n\nThe NativePHP bridge may not be ready. Please restart the app and try again.";
-            file_put_contents($this->installLogFile, "\n[LandoDEV ERROR] ".$e->getMessage()."\n", FILE_APPEND);
+            $this->installOutput = '[Lando Studio ERROR] Failed to start install process: '.$e->getMessage()."\n\nThe NativePHP bridge may not be ready. Please restart the app and try again.";
+            file_put_contents($this->installLogFile, "\n[Lando Studio ERROR] ".$e->getMessage()."\n", FILE_APPEND);
         }
     }
 

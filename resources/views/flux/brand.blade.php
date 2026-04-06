@@ -30,9 +30,9 @@ $nameLabelClasses = Flux::classes()
 $brandName = (string) ($name ?? '');
 $brandPrefix = $brandName;
 $brandSuffix = '';
-if ($brandName !== '' && str_ends_with($brandName, 'DEV')) {
-    $brandPrefix = substr($brandName, 0, -3);
-    $brandSuffix = 'DEV';
+if ($brandName !== '' && str_ends_with($brandName, 'Studio')) {
+    $brandPrefix = substr($brandName, 0, -6);
+    $brandSuffix = 'Studio';
 }
 @endphp
 

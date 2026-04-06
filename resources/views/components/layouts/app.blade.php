@@ -1,5 +1,5 @@
 @php
-    $documentTitle = filled($title) ? $title : config('app.name', 'LandoDEV');
+    $documentTitle = filled($title) ? $title : config('app.name', 'Lando Studio');
     $savedAppearance = \App\Models\UserPreference::get('appearance', 'system');
 @endphp
 <!DOCTYPE html>
@@ -36,8 +36,8 @@
 <flux:sidebar sticky stashable class="bg-zinc-50 dark:bg-zinc-900 border-r rtl:border-r-0 rtl:border-l border-zinc-200 dark:border-zinc-700">
     <flux:sidebar.toggle class="lg:hidden" icon="x-mark" />
 
-    <flux:brand href="/" logo="{{ asset('assets/rocket.png') }}" name="LandoDEV" class="px-2 dark:hidden" />
-    <flux:brand href="/" logo="{{ asset('assets/rocket.png') }}" name="LandoDEV" class="px-2 hidden dark:flex" />
+    <flux:brand href="/" logo="{{ asset('assets/rocket.png') }}" name="Lando Studio" class="px-2 dark:hidden" />
+    <flux:brand href="/" logo="{{ asset('assets/rocket.png') }}" name="Lando Studio" class="px-2 hidden dark:flex" />
 
     <div class="px-3 mt-2">
         <flux:button href="{{ route('create', [], false) }}" variant="primary" class="w-full justify-center" icon="plus" wire:navigate>
@@ -105,7 +105,7 @@
     document.addEventListener('livewire:navigated', function () {
         var t = document.title && document.title.trim();
         if (!t) {
-            document.title = @json(config('app.name', 'LandoDEV'));
+            document.title = @json(config('app.name', 'Lando Studio'));
         }
     });
 </script>

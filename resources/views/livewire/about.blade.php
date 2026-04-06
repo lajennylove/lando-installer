@@ -1,13 +1,13 @@
 <div>
     <div class="max-w-2xl mx-auto">
-        <flux:heading size="xl">About LandoDEV</flux:heading>
+        <flux:heading size="xl">About Lando Studio</flux:heading>
         <flux:subheading class="mt-1">Local WordPress Development Manager</flux:subheading>
 
         <div class="mt-8 space-y-6">
             <div class="flex items-center gap-4">
-                <img src="{{ asset('assets/rocket.png') }}" alt="LandoDEV" class="size-[60px] shrink-0 object-contain" />
+                <img src="{{ asset('assets/rocket.png') }}" alt="Lando Studio" class="size-[60px] shrink-0 object-contain" />
                 <div>
-                    <flux:heading size="lg">LandoDEV</flux:heading>
+                    <flux:heading size="lg">Lando Studio</flux:heading>
                     <flux:text class="text-zinc-500">Version {{ config('nativephp.version', '1.0.0') }}</flux:text>
                     @if($url = config('app.repository_url'))
                         <flux:text class="text-zinc-500 mt-1">
@@ -30,7 +30,7 @@
 
             <div class="space-y-4">
                 <flux:text>
-                    LandoDEV is a desktop application for managing local WordPress development environments
+                    Lando Studio is a desktop application for managing local WordPress development environments
                     powered by Lando. It streamlines the process of creating new WordPress sites with Sage themes
                     and cloning existing production environments.
                 </flux:text>
