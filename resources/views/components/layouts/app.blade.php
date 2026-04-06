@@ -79,11 +79,26 @@
 
 @fluxScripts
 
-{{-- flux.min.js registers Alpine.effect(()=>t(Flux.appearance)) which re-applies
-     system/OS dark after our <head> script ran. Override it here by writing directly
-     into the Alpine reactive store — this triggers the same effect with the correct value. --}}
+{{-- flux.min.js uses Alpine.effect + livewire:navigated to re-apply t(Flux.appearance).
+     Since Alpine may defer effects to DOMContentLoaded, we use requestAnimationFrame
+     to run AFTER all synchronous JS, microtasks, and Alpine initialization complete. --}}
 @if($savedAppearance !== 'system')
-<script>if (window.Flux) window.Flux.appearance = @json($savedAppearance);</script>
+<script>
+    (function (pref) {
+        function applyPref() {
+            if (pref === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            if (window.Flux && window.Flux.appearance !== undefined) {
+                window.Flux.appearance = pref;
+            }
+        }
+        requestAnimationFrame(applyPref);
+        document.addEventListener('livewire:navigated', applyPref);
+    }(@json($savedAppearance)));
+</script>
 @endif
 
 <script>
