@@ -97,7 +97,7 @@ class Settings extends Component
         $this->appearance = $value;
         UserPreference::set('appearance', $value);
 
-        $this->dispatch('appearance-changed', appearance: $value);
+        $this->js('window.Flux && window.Flux.applyAppearance('.json_encode($value).')');
     }
 
     public function saveDefaultPhpVersion(string $version): void

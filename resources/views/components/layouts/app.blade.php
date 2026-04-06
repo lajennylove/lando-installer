@@ -92,12 +92,6 @@
             document.title = @json(config('app.name', 'LandoDEV'));
         }
     });
-
-    window.addEventListener('appearance-changed', function (e) {
-        if (window.Flux && e.detail && e.detail.appearance) {
-            window.Flux.applyAppearance(e.detail.appearance);
-        }
-    });
 </script>
 
 @if(config('nativephp-internal.running'))
