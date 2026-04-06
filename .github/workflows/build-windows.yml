@@ -11,6 +11,10 @@ on:
         options:
           - x64
           - arm64
+      version:
+        description: 'App version (must be semver x.y.z)'
+        required: true
+        default: '1.0.0'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -70,7 +74,7 @@ jobs:
         shell: pwsh
         env:
           NATIVEPHP_APP_ID: com.landodev.app
-          NATIVEPHP_APP_VERSION: ${{ github.ref_name != '' && github.ref_name || '0.0.0-dev' }}
+          NATIVEPHP_APP_VERSION: ${{ inputs.version }}
           NATIVEPHP_UPDATER_ENABLED: 'false'
           APP_ENV: production
           APP_DEBUG: 'false'
@@ -90,7 +94,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LandoDEV-windows-${{ inputs.arch }}
+          name: LandoDEV-${{ inputs.version }}-windows-${{ inputs.arch }}
           path: dist/
           if-no-files-found: warn
           retention-days: 7
