@@ -245,15 +245,9 @@
                         <div class="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
                             <div>
                                 <flux:heading size="sm">{{ $remote->remote_domain }}</flux:heading>
-                                <flux:text class="text-sm text-zinc-500">
-                                    {{ $remote->ssh_user }}@{{ $remote->ssh_server_ip }}
-                                    @if($remote->remote_path)
-                                        <span class="block mt-0.5 font-mono text-xs truncate max-w-xl" title="{{ $remote->remote_path }}">{{ $remote->remote_path }}</span>
-                                    @endif
-                                    @if($remote->theme_name)
-                                        <span class="block">Theme: {{ $remote->theme_name }}</span>
-                                    @endif
-                                </flux:text>
+                                @if($remote->theme_name)
+                                    <flux:text class="text-sm text-zinc-500">Theme: {{ $remote->theme_name }}</flux:text>
+                                @endif
                             </div>
                             <div class="flex items-center gap-2">
                                 <flux:button wire:click="editRemoteSite({{ $remote->id }})" size="sm" variant="ghost" icon="pencil" />

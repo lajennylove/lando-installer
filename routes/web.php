@@ -8,13 +8,19 @@ use App\Livewire\NewSite;
 use App\Livewire\Settings;
 use App\Livewire\SiteDashboard;
 use App\Models\Site;
+use App\Services\DependencyChecker;
 use Illuminate\Support\Facades\Route;
 
 // First-run dependency check
 Route::get('/setup', DependencyCheck::class)->name('setup');
 
-// Home — smart redirect
+// Home — gate on dependencies first, then smart-redirect to last site or /create
 Route::get('/', function () {
+    $checker = app(DependencyChecker::class);
+    if (! $checker->allRequiredInstalled()) {
+        return redirect()->route('setup');
+    }
+
     $site = Site::latest()->first();
     if ($site) {
         return redirect()->route('sites.show', $site);

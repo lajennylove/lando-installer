@@ -83,6 +83,18 @@ class PlatformDetector
     }
 
     /**
+     * Shell + flag pair for running PowerShell commands on Windows.
+     * The Lando and winget install commands are PowerShell syntax and must NOT
+     * run through cmd.exe — they need powershell -ExecutionPolicy Bypass -Command.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public function powershellArgs(): array
+    {
+        return ['powershell', '-ExecutionPolicy Bypass -Command'];
+    }
+
+    /**
      * Wrap a shell command so step logging does not steal stdout from inner redirects/pipes.
      * Example bug: {@code cmd | gzip > dump.gz > log} sends gzip output to log, leaving dump.gz empty.
      */

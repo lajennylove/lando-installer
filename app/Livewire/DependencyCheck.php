@@ -75,8 +75,14 @@ class DependencyCheck extends Component
         $command = $installer->getInstallCommand($dependency);
         $logFile = storage_path("logs/install_{$dependency}_".time().'.log');
 
-        $shell = $platform->shellWrapper();
-        $flag = $platform->shellFlag();
+        // Lando (iex/irm) and winget commands are PowerShell syntax on Windows;
+        // cmd.exe cannot run them. Use powershell for all Windows dep installs.
+        if ($platform->isWindows()) {
+            [$shell, $flag] = $platform->powershellArgs();
+        } else {
+            $shell = $platform->shellWrapper();
+            $flag = $platform->shellFlag();
+        }
 
         ChildProcess::start(
             cmd: [$shell, $flag, $command." > {$logFile} 2>&1"],

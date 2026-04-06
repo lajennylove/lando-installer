@@ -39,7 +39,10 @@ class DependencyChecker
 
     public function isOrbStackInstalled(): bool
     {
-        return $this->commandExists('orbstack');
+        // OrbStack's CLI binary is 'orb', not 'orbstack'.
+        // Also check for the macOS app bundle as a fallback.
+        return $this->commandExists('orb')
+            || (PHP_OS_FAMILY === 'Darwin' && is_dir('/Applications/OrbStack.app'));
     }
 
     public function getLandoVersion(): ?string
@@ -54,7 +57,7 @@ class DependencyChecker
 
     public function getOrbStackVersion(): ?string
     {
-        return $this->getCommandOutput('orbstack version');
+        return $this->getCommandOutput('orb version');
     }
 
     public function getLandoPath(): ?string
