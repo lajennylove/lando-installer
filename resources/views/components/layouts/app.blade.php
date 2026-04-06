@@ -23,6 +23,19 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     @fluxAppearance
+
+    @php $savedAppearance = \App\Models\UserPreference::get('appearance', 'system'); @endphp
+    <script>
+        (function () {
+            var saved = @json($savedAppearance);
+            if (saved === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else if (saved === 'light') {
+                document.documentElement.classList.remove('dark');
+            }
+            // 'system' is already handled by @fluxAppearance above via matchMedia
+        })();
+    </script>
 </head>
 
 <body class="min-h-screen bg-white dark:bg-zinc-800">
@@ -78,6 +91,12 @@
         var t = document.title && document.title.trim();
         if (!t) {
             document.title = @json(config('app.name', 'LandoDEV'));
+        }
+    });
+
+    document.addEventListener('appearance-changed', function (e) {
+        if (window.Flux && e.detail && e.detail.appearance) {
+            window.Flux.applyAppearance(e.detail.appearance);
         }
     });
 </script>

@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Livewire\Concerns\WithNotifications;
 use App\Models\RemoteSite;
+use App\Models\UserPreference;
 use App\Services\ApplicationDatabaseReset;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
@@ -15,6 +16,9 @@ use Livewire\Component;
 class Settings extends Component
 {
     use WithNotifications;
+
+    /** App appearance: 'system' | 'light' | 'dark'. Stored in user_preferences. */
+    public string $appearance = 'system';
 
     /** Defaults for new Lando-managed sites (container PHP/DB/Redis), not the host NativePHP runtime. */
     public string $defaultPhpVersion = '';
@@ -72,6 +76,8 @@ class Settings extends Component
 
     public function mount(): void
     {
+        $this->appearance = UserPreference::get('appearance', 'system');
+
         $this->phpVersions = config('lando_dev.defaults.php_versions');
         $this->dbVersions = config('lando_dev.defaults.db_versions');
         $this->redisVersions = config('lando_dev.defaults.redis_versions');
@@ -81,6 +87,17 @@ class Settings extends Component
         $this->defaultDbVersion = $defaults['db_version'] ?? config('lando_dev.defaults.db_version');
         $this->defaultRedisVersion = $defaults['redis_version'] ?? config('lando_dev.defaults.redis_version');
         $this->defaultCodePath = $defaults['code_path'] ?? config('lando_dev.defaults.code_path') ?? '~/code/sites/';
+    }
+
+    public function setAppearance(string $value): void
+    {
+        $allowed = ['system', 'light', 'dark'];
+        $value = in_array($value, $allowed, true) ? $value : 'system';
+
+        $this->appearance = $value;
+        UserPreference::set('appearance', $value);
+
+        $this->dispatch('appearance-changed', appearance: $value);
     }
 
     public function saveDefaultPhpVersion(string $version): void

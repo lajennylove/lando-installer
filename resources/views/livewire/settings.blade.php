@@ -3,70 +3,58 @@
     <flux:subheading class="mt-1">Configure LandoDEV defaults and remote sites</flux:subheading>
 
     {{-- Appearance Section --}}
-    <div class="mt-8"
-        x-data="{
-            appearance: localStorage.getItem('flux.appearance') || 'system',
-            set(value) {
-                this.appearance = value;
-                window.Flux.applyAppearance(value);
-            }
-        }"
-    >
+    <div class="mt-8">
         <flux:heading size="lg">Appearance</flux:heading>
         <flux:subheading class="mt-1">Choose how LandoDEV looks on your screen</flux:subheading>
 
         <div class="mt-4 flex gap-3">
             {{-- Auto --}}
             <button
-                @click="set('system')"
-                :class="appearance === 'system'
-                    ? 'ring-2 ring-zinc-900 dark:ring-white border-zinc-300 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-700'
-                    : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-500'"
-                class="flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm font-medium text-zinc-700 dark:text-zinc-200 transition cursor-pointer focus:outline-none"
+                wire:click="setAppearance('system')"
+                @class([
+                    'flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm font-medium transition cursor-pointer focus:outline-none',
+                    'ring-2 ring-zinc-900 dark:ring-white border-zinc-300 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-white' => $appearance === 'system',
+                    'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-500 text-zinc-600 dark:text-zinc-400' => $appearance !== 'system',
+                ])
             >
-                {{-- Half-sun / half-moon icon --}}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <circle cx="12" cy="12" r="9" />
                     <path d="M12 3v18" />
-                    {{-- Sun rays on the right half --}}
                     <line x1="16.24" y1="7.76" x2="17.66" y2="6.34" />
                     <line x1="21" y1="12" x2="22.42" y2="12" />
                     <line x1="16.24" y1="16.24" x2="17.66" y2="17.66" />
-                    {{-- Moon path on the left half --}}
-                    <path d="M12 7a5 5 0 0 0 0 10" fill="currentColor" opacity="0.15" />
+                    <path d="M12 7a5 5 0 0 0 0 10" fill="currentColor" opacity="0.2" />
                 </svg>
                 Auto
             </button>
 
             {{-- Light --}}
             <button
-                @click="set('light')"
-                :class="appearance === 'light'
-                    ? 'ring-2 ring-zinc-900 dark:ring-white border-zinc-300 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-700'
-                    : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-500'"
-                class="flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm font-medium text-zinc-700 dark:text-zinc-200 transition cursor-pointer focus:outline-none"
+                wire:click="setAppearance('light')"
+                @class([
+                    'flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm font-medium transition cursor-pointer focus:outline-none',
+                    'ring-2 ring-zinc-900 dark:ring-white border-zinc-300 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-white' => $appearance === 'light',
+                    'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-500 text-zinc-600 dark:text-zinc-400' => $appearance !== 'light',
+                ])
             >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <circle cx="12" cy="12" r="4" />
-                    <line x1="12" y1="2" x2="12" y2="4" />
-                    <line x1="12" y1="20" x2="12" y2="22" />
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                    <line x1="2" y1="12" x2="4" y2="12" />
-                    <line x1="20" y1="12" x2="22" y2="12" />
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                    <line x1="12" y1="2" x2="12" y2="4" /><line x1="12" y1="20" x2="12" y2="22" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="2" y1="12" x2="4" y2="12" /><line x1="20" y1="12" x2="22" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                 </svg>
                 Light
             </button>
 
             {{-- Dark --}}
             <button
-                @click="set('dark')"
-                :class="appearance === 'dark'
-                    ? 'ring-2 ring-zinc-900 dark:ring-white border-zinc-300 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-700'
-                    : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-500'"
-                class="flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm font-medium text-zinc-700 dark:text-zinc-200 transition cursor-pointer focus:outline-none"
+                wire:click="setAppearance('dark')"
+                @class([
+                    'flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm font-medium transition cursor-pointer focus:outline-none',
+                    'ring-2 ring-zinc-900 dark:ring-white border-zinc-300 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-white' => $appearance === 'dark',
+                    'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-500 text-zinc-600 dark:text-zinc-400' => $appearance !== 'dark',
+                ])
             >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
