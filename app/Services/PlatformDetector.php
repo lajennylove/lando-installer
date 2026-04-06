@@ -48,10 +48,16 @@ class PlatformDetector
     public function homeDir(): string
     {
         if ($this->isWindows()) {
-            return rtrim(env('USERPROFILE', 'C:\\Users\\'.get_current_user()), DIRECTORY_SEPARATOR);
+            // getenv() reads the actual Windows environment directly — safer than
+            // env() which goes through Laravel Dotenv and may not have USERPROFILE.
+            $home = getenv('USERPROFILE')
+                ?: (getenv('HOMEDRIVE').getenv('HOMEPATH'))
+                ?: 'C:\\Users\\'.get_current_user();
+
+            return rtrim($home, DIRECTORY_SEPARATOR);
         }
 
-        return rtrim(env('HOME', '/home/'.get_current_user()), DIRECTORY_SEPARATOR);
+        return rtrim(getenv('HOME') ?: '/home/'.get_current_user(), DIRECTORY_SEPARATOR);
     }
 
     public function defaultCodePath(): string

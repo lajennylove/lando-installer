@@ -112,6 +112,7 @@ class DependencyCheck extends Component
         // Read latest log output and dispatch scroll event for the terminal.
         if ($this->installLogFile && file_exists($this->installLogFile)) {
             $raw = file_get_contents($this->installLogFile) ?: '';
+            $raw = self::decodeLogBytes($raw);
             $this->installOutput = mb_substr($raw, -6000);
             $this->dispatch('landodev-scroll-terminal');
         }
@@ -137,6 +138,24 @@ class DependencyCheck extends Component
         }
 
         return true;
+    }
+
+    /**
+     * PowerShell's *> redirect writes UTF-16 LE with BOM by default.
+     * Detect the BOM (FF FE) and convert to UTF-8 so the terminal renders correctly.
+     */
+    private static function decodeLogBytes(string $raw): string
+    {
+        if (str_starts_with($raw, "\xFF\xFE")) {
+            return mb_convert_encoding(substr($raw, 2), 'UTF-8', 'UTF-16LE');
+        }
+
+        // UTF-8 BOM (rare but possible)
+        if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+            return substr($raw, 3);
+        }
+
+        return $raw;
     }
 
     public function continueToApp(): void {}

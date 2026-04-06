@@ -20,8 +20,20 @@ final class LogContentUtf8
             return '[Gzipped SQL is written to dumpfile.sql.gz — binary output is not shown here.]';
         }
 
-        if (str_contains($raw, "\0")) {
-            return '[Output contained binary data and was omitted so the UI can keep updating.]';
+        // PowerShell *> redirect writes UTF-16 LE with BOM (FF FE) by default.
+        // Convert to UTF-8 before any further processing.
+        if (str_starts_with($raw, "\xFF\xFE")) {
+            $raw = mb_convert_encoding(substr($raw, 2), 'UTF-8', 'UTF-16LE');
+        } elseif (str_starts_with($raw, "\xEF\xBB\xBF")) {
+            $raw = substr($raw, 3);
+        } elseif (str_contains($raw, "\0")) {
+            // Unrecognised encoding with null bytes — attempt UTF-16 LE without BOM.
+            $converted = mb_convert_encoding($raw, 'UTF-8', 'UTF-16LE');
+            if ($converted !== false && mb_check_encoding($converted, 'UTF-8')) {
+                $raw = $converted;
+            } else {
+                return '[Output contained binary data and was omitted so the UI can keep updating.]';
+            }
         }
 
         // Normalise line endings: CRLF → LF, then bare CR → LF.
