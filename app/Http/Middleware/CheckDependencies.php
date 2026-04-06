@@ -14,14 +14,15 @@ class CheckDependencies
     public function handle(Request $request, Closure $next): Response
     {
         // Never block: the setup page itself, settings (so Manage Deps button is reachable),
-        // health check, Livewire internals, assets.
+        // health check, Livewire internals, assets, or any Livewire AJAX update request.
         if (
             $request->is('setup') ||
             $request->is('settings') ||
             $request->is('up') ||
             $request->is('livewire/*') ||
             $request->is('vendor/*') ||
-            $request->is('assets/*')
+            $request->is('assets/*') ||
+            $request->hasHeader('X-Livewire')
         ) {
             return $next($request);
         }

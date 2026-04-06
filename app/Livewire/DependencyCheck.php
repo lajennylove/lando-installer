@@ -80,6 +80,9 @@ class DependencyCheck extends Component
 
         $command = $installer->getInstallCommand($dependency);
 
+        // Pre-write so the log file exists before the process starts.
+        file_put_contents($this->installLogFile, "[LandoDEV] Installing {$dependency}...\n[LandoDEV] Command: {$command}\n");
+
         if ($platform->isWindows()) {
             // Spread all PS args; the log redirect is PowerShell-native syntax.
             $shellArgs = $platform->powershellArgs();
@@ -88,10 +91,16 @@ class DependencyCheck extends Component
             $cmd = [$platform->shellWrapper(), $platform->shellFlag(), "{$command} > ".escapeshellarg($this->installLogFile).' 2>&1'];
         }
 
-        ChildProcess::start(
-            cmd: $cmd,
-            alias: "install-{$dependency}",
-        );
+        try {
+            ChildProcess::start(
+                cmd: $cmd,
+                alias: "install-{$dependency}",
+            );
+        } catch (\Throwable $e) {
+            $this->installing = false;
+            $this->installOutput = '[LandoDEV ERROR] Failed to start install process: '.$e->getMessage()."\n\nThe NativePHP bridge may not be ready. Please restart the app and try again.";
+            file_put_contents($this->installLogFile, "\n[LandoDEV ERROR] ".$e->getMessage()."\n", FILE_APPEND);
+        }
     }
 
     public function pollInstallStatus(): void

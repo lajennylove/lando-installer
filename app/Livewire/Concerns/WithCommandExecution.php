@@ -106,10 +106,17 @@ trait WithCommandExecution
             $cmd = [$platform->shellWrapper(), $platform->shellFlag(), $wrapped];
         }
 
-        ChildProcess::start(
-            cmd: $cmd,
-            alias: $alias,
-        );
+        try {
+            ChildProcess::start(
+                cmd: $cmd,
+                alias: $alias,
+            );
+        } catch (\Throwable $e) {
+            // NativePHP bridge (localhost:4002) unreachable — log and surface the error.
+            $msg = 'ChildProcess::start() failed: '.$e->getMessage();
+            file_put_contents($logFile, "\n[LandoDEV ERROR] {$msg}\n", FILE_APPEND);
+            $this->failCurrentStep($site, $msg);
+        }
     }
 
     public function checkCommandStatus(): void
