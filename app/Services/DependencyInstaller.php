@@ -34,8 +34,16 @@ class DependencyInstaller
         return match ($this->platform->os()) {
             // Bootstrap Homebrew first if absent, then install Docker Desktop cask.
             'macos' => $this->withBrewBootstrap('brew install --cask docker'),
-            // winget ships with Windows 10 (1709+) and Windows 11.
-            'windows' => 'winget install Docker.DockerDesktop',
+            // Try winget first (Windows 10 1709+ / Windows 11); fall back to direct download
+            // for older machines where winget may not be installed.
+            'windows' => implode(' ; ', [
+                'if (Get-Command winget -ErrorAction SilentlyContinue)',
+                '{ winget install Docker.DockerDesktop --accept-package-agreements --accept-source-agreements }',
+                'else',
+                '{ $f="$env:TEMP\DockerInstaller.exe"',
+                '  Invoke-WebRequest -Uri "https://desktop.docker.com/win/main/amd64/Docker Desktop Installer.exe" -OutFile $f',
+                '  Start-Process $f -ArgumentList "install","--quiet" -Wait }',
+            ]),
             // get.docker.com auto-detects the distro (apt, yum, dnf, zypper, etc.).
             default => 'curl -fsSL https://get.docker.com | sh',
         };
