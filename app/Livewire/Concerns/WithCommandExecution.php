@@ -92,13 +92,22 @@ trait WithCommandExecution
 
         $site->update(['log_file' => $logFile]);
 
-        $shell = app(PlatformDetector::class)->shellWrapper();
-        $flag = app(PlatformDetector::class)->shellFlag();
+        // Pre-write the command so the log file exists immediately and the terminal
+        // shows what is being attempted even if the child process fails to start.
+        file_put_contents($logFile, "[LandoDEV] Running: {$command}\n");
 
-        $wrapped = app(PlatformDetector::class)->wrapCommandWithLogRedirect($command, $logFile);
+        $platform = app(PlatformDetector::class);
+        $wrapped = $platform->wrapCommandWithLogRedirect($command, $logFile);
+
+        if ($platform->isWindows()) {
+            // Use PowerShell — lando on Windows runs via PS, not cmd.exe.
+            $cmd = [...$platform->powershellArgs(), $wrapped];
+        } else {
+            $cmd = [$platform->shellWrapper(), $platform->shellFlag(), $wrapped];
+        }
 
         ChildProcess::start(
-            cmd: [$shell, $flag, $wrapped],
+            cmd: $cmd,
             alias: $alias,
         );
     }

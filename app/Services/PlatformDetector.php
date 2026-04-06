@@ -74,12 +74,14 @@ class PlatformDetector
 
     public function shellWrapper(): string
     {
-        return $this->isWindows() ? 'cmd' : 'bash';
+        return $this->isWindows() ? 'powershell' : 'bash';
     }
 
     public function shellFlag(): string
     {
-        return $this->isWindows() ? '/c' : '-c';
+        // Windows: this is only used as a fallback; most callers should use
+        // powershellArgs() which returns the full ['-ExecutionPolicy','Bypass','-NoProfile','-Command'] list.
+        return $this->isWindows() ? '-Command' : '-c';
     }
 
     /**
@@ -98,10 +100,20 @@ class PlatformDetector
 
     /**
      * Wrap a shell command so step logging does not steal stdout from inner redirects/pipes.
-     * Example bug: {@code cmd | gzip > dump.gz > log} sends gzip output to log, leaving dump.gz empty.
+     *
+     * On Unix:  (command) > 'logfile' 2>&1
+     * On Windows (PowerShell): & { command } *> 'logfile'
+     *   *> captures all PS streams (stdout, stderr, verbose, warning…)
+     *   Single-quoted path is a PS literal string — safe for any Windows path.
      */
     public function wrapCommandWithLogRedirect(string $command, string $logFile): string
     {
+        if ($this->isWindows()) {
+            $log = str_replace("'", "''", $logFile); // escape PS single-quoted string
+
+            return "& { {$command} } *> '{$log}'";
+        }
+
         $log = escapeshellarg($logFile);
 
         return '('.$command.') > '.$log.' 2>&1';

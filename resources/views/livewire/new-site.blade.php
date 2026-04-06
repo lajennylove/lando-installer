@@ -129,6 +129,16 @@
                     <flux:button wire:click="retryFromFailedStep" variant="primary" icon="arrow-path">
                         Retry Failed Step
                     </flux:button>
+                    @if($this->lastError)
+                        <flux:text class="text-xs text-red-600 dark:text-red-400 font-mono break-all">
+                            {{ $this->lastError }}
+                        </flux:text>
+                    @endif
+                    @if($this->failedLogFile)
+                        <flux:text class="text-xs text-zinc-400 font-mono break-all">
+                            Log: {{ $this->failedLogFile }}
+                        </flux:text>
+                    @endif
                 @endif
 
                 @if(!$isExecuting && !$executionFailed && $siteId)

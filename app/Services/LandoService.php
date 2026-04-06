@@ -188,6 +188,15 @@ class LandoService
     {
         $escapedPath = $this->escapePath($path);
 
+        if ($this->platform->isWindows()) {
+            // PowerShell 5.1 (Windows 10 default) does not support &&.
+            // Use Set-Location + semicolon, and call the exe with & to handle spaces in path.
+            $lando = $this->getLandoPath();
+            $psLando = '& "'.str_replace('"', '""', $lando).'"';
+
+            return "Set-Location {$escapedPath}; {$psLando} {$landoCmd}";
+        }
+
         return $this->wrapInShell("cd {$escapedPath} && {$this->getLandoPath()} {$landoCmd}");
     }
 

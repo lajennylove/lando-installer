@@ -279,6 +279,16 @@ class CloneSite extends Component
         return $this->siteId ? Site::find($this->siteId) : null;
     }
 
+    public function getFailedLogFileProperty(): ?string
+    {
+        return $this->executionFailed ? ($this->getSite()?->log_file) : null;
+    }
+
+    public function getLastErrorProperty(): ?string
+    {
+        return $this->executionFailed ? ($this->getSite()?->last_error) : null;
+    }
+
     protected function getStepDefinitions(): array
     {
         if ($this->cachedSteps === null) {
