@@ -24,7 +24,7 @@ $classes = Flux::classes()
 $nameLabelClasses = Flux::classes()
     // Plain utilities: Flux’s dark:[:where(&)]:… selectors often don’t win in Tailwind v4 / Electron, leaving
     // light-mode zinc-800 on dark sidebars (invisible text). See sidebar bg-zinc-900 in app layout.
-    ->add('min-w-0 truncate text-2xl font-medium text-zinc-900 dark:text-white')
+    ->add('min-w-0 truncate text-xl font-medium text-zinc-900 dark:text-white')
     ;
 
 $brandName = (string) ($name ?? '');
