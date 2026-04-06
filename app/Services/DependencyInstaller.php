@@ -21,8 +21,9 @@ class DependencyInstaller
     public function installLando(): string
     {
         if ($this->platform->isWindows()) {
-            // PowerShell syntax — DependencyCheck::install() runs this via powershell.exe
-            return "iex (irm 'https://get.lando.dev/setup-lando.ps1' -UseB)";
+            // $env:NONINTERACTIVE=1 suppresses all prompts (equivalent to -Yes flag).
+            // setup-lando.ps1 installs to %USERPROFILE%\.lando\bin\lando.exe by default.
+            return '$env:NONINTERACTIVE=1; iex (irm \'https://get.lando.dev/setup-lando.ps1\' -UseB)';
         }
 
         // The setup-lando.sh script handles macOS and all major Linux distros.

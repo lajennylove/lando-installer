@@ -33,24 +33,20 @@ class DependencyChecker
             return true;
         }
 
-        // On Windows, the PHP process PATH is frozen at launch, so newly-installed
-        // binaries won't be found by `where` until the app restarts. Check common
-        // install locations as a fallback.
+        // On Windows, the PHP process PATH is frozen at app launch, so newly-installed
+        // binaries won't be found by `where` until the app restarts.
+        // The official setup-lando.ps1 always installs to %USERPROFILE%\.lando\bin\lando.exe
         if ($this->platform->isWindows()) {
-            $home = $this->platform->homeDir();
-            $candidates = [
-                $home.DIRECTORY_SEPARATOR.'AppData'.DIRECTORY_SEPARATOR.'Local'.DIRECTORY_SEPARATOR.'Lando'.DIRECTORY_SEPARATOR.'lando.exe',
-                'C:\\ProgramData\\Lando\\lando.exe',
-                'C:\\Program Files\\Lando\\lando.exe',
-            ];
-            foreach ($candidates as $path) {
-                if (file_exists($path)) {
-                    return true;
-                }
-            }
+            return file_exists($this->windowsLandoExe());
         }
 
         return false;
+    }
+
+    /** Default path used by the official Lando Windows installer (setup-lando.ps1). */
+    private function windowsLandoExe(): string
+    {
+        return $this->platform->homeDir().'\\.lando\\bin\\lando.exe';
     }
 
     public function isDockerInstalled(): bool
@@ -99,6 +95,14 @@ class DependencyChecker
 
     public function getLandoPath(): ?string
     {
+        // On Windows, always use the known install path so child processes launched by
+        // NativePHP (which may have a frozen PATH) can find the exe without PATH lookup.
+        if ($this->platform->isWindows()) {
+            $exe = $this->windowsLandoExe();
+
+            return file_exists($exe) ? $exe : ($this->getCommandPath('lando') ?? $exe);
+        }
+
         return $this->getCommandPath('lando');
     }
 
