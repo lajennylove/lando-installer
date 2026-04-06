@@ -35,18 +35,23 @@ class DependencyChecker
 
         // On Windows, the PHP process PATH is frozen at app launch, so newly-installed
         // binaries won't be found by `where` until the app restarts.
-        // The official setup-lando.ps1 always installs to %USERPROFILE%\.lando\bin\lando.exe
+        // The official setup-lando.ps1 installs to %USERPROFILE%\.lando\bin\.
+        // Check both lando.cmd (the shell wrapper used in practice) and lando.exe.
         if ($this->platform->isWindows()) {
-            return file_exists($this->windowsLandoExe());
+            $bin = $this->platform->homeDir().'\\.lando\\bin\\';
+
+            return file_exists($bin.'lando.cmd') || file_exists($bin.'lando.exe');
         }
 
         return false;
     }
 
-    /** Default path used by the official Lando Windows installer (setup-lando.ps1). */
+    /** Full path to lando.cmd (preferred on Windows) or lando.exe fallback. */
     private function windowsLandoExe(): string
     {
-        return $this->platform->homeDir().'\\.lando\\bin\\lando.exe';
+        $bin = $this->platform->homeDir().'\\.lando\\bin\\';
+
+        return file_exists($bin.'lando.cmd') ? $bin.'lando.cmd' : $bin.'lando.exe';
     }
 
     public function isDockerInstalled(): bool
@@ -79,7 +84,12 @@ class DependencyChecker
 
     public function getLandoVersion(): ?string
     {
-        return $this->getCommandOutput('lando version');
+        // On Windows use the full path in case the child process PATH is frozen.
+        $cmd = $this->platform->isWindows()
+            ? '"'.$this->windowsLandoExe().'" version'
+            : 'lando version';
+
+        return $this->getCommandOutput($cmd);
     }
 
     public function getDockerVersion(): ?string
@@ -100,7 +110,8 @@ class DependencyChecker
     public function getLandoPath(): ?string
     {
         // On Windows, always use the known install path so child processes launched by
-        // NativePHP (which may have a frozen PATH) can find the exe without PATH lookup.
+        // NativePHP (which may have a frozen PATH) can find the binary without PATH lookup.
+        // Prefer lando.cmd (the shell wrapper) over lando.exe.
         if ($this->platform->isWindows()) {
             $exe = $this->windowsLandoExe();
 
