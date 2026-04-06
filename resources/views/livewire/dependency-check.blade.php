@@ -1,8 +1,8 @@
 <div @if($installing) wire:poll.3s="pollInstallStatus" @endif>
-    <div class="grid lg:grid-cols-3 gap-6 h-full">
+    <div class="grid lg:grid-cols-2 gap-6 h-full">
 
         {{-- Left column: dependency list --}}
-        <div class="lg:col-span-1 flex flex-col">
+        <div class="flex flex-col">
             <div class="text-center mb-6">
                 <img src="{{ asset('assets/rocket.png') }}" alt="LandoDEV" class="mx-auto mb-4 size-[60px] object-contain" />
                 <flux:heading size="xl">Welcome to LandoDEV</flux:heading>
@@ -14,11 +14,11 @@
                     <div class="flex items-center justify-between p-4 rounded-lg border {{ $dep['installed'] ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20' : ($dep['required'] ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800') }}">
                         <div class="flex items-center gap-3">
                             @if($dep['installed'])
-                                <div class="w-8 h-8 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center">
+                                <div class="w-8 h-8 shrink-0 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center">
                                     <flux:icon name="check" class="w-5 h-5 text-green-600 dark:text-green-400" />
                                 </div>
                             @else
-                                <div class="w-8 h-8 rounded-full bg-red-100 dark:bg-red-800 flex items-center justify-center">
+                                <div class="w-8 h-8 shrink-0 rounded-full bg-red-100 dark:bg-red-800 flex items-center justify-center">
                                     <flux:icon name="x-mark" class="w-5 h-5 text-red-600 dark:text-red-400" />
                                 </div>
                             @endif
@@ -71,7 +71,7 @@
         </div>
 
         {{-- Right column: terminal --}}
-        <div class="lg:col-span-2 flex flex-col">
+        <div class="flex flex-col">
             <div class="flex items-center justify-between mb-2">
                 <flux:heading size="sm" class="text-zinc-500">Install Log</flux:heading>
                 @if($installing)
