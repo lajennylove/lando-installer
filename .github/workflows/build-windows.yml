@@ -1,0 +1,75 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        required: true
+        default: 'x64'
+        type: choice
+        options:
+          - x64
+          - arm64
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo, pdo_sqlite, sqlite3, zip, bcmath, curl
+          tools: composer:v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Prepare .env
+        shell: pwsh
+        run: |
+          Copy-Item .env.example .env
+          php artisan key:generate --force
+          php artisan config:clear
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Create SQLite database
+        shell: pwsh
+        run: |
+          New-Item -ItemType File -Force database\database.sqlite
+          php artisan migrate --force
+
+      - name: Build Windows app
+        shell: pwsh
+        env:
+          NATIVEPHP_APP_ID: com.landodev.app
+          NATIVEPHP_APP_VERSION: ${{ github.ref_name != '' && github.ref_name || '0.0.0-dev' }}
+          NATIVEPHP_UPDATER_ENABLED: 'false'
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: http://localhost
+        run: php artisan native:build win ${{ inputs.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LandoDEV-windows-${{ inputs.arch }}
+          path: dist/
+          retention-days: 7
