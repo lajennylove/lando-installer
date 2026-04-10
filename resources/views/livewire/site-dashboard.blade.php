@@ -11,6 +11,16 @@
                     default => 'bg-zinc-400',
                 } }}"></span>
                 <flux:text class="text-sm capitalize">{{ $site->status->value ?? $site->status }}</flux:text>
+                <flux:button
+                    wire:click="checkRealStatus"
+                    wire:loading.attr="disabled"
+                    wire:target="checkRealStatus"
+                    size="xs"
+                    variant="ghost"
+                    icon="arrow-path"
+                    title="Refresh real container status"
+                    class="ml-1"
+                />
             </div>
         </div>
     </div>

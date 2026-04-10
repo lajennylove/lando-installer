@@ -136,7 +136,7 @@ class SiteDashboard extends Component
             return;
         }
 
-        $running = $lando->isRunning($this->site->path);
+        $running = $lando->isRunning($this->site->path, $this->site->name);
         $newStatus = $running ? SiteStatus::Running : SiteStatus::Stopped;
 
         if ($this->site->status !== $newStatus && $this->site->status !== SiteStatus::Creating) {

@@ -161,8 +161,35 @@ class LandoService
         return $this->buildCommand($path, 'info --format=json');
     }
 
-    public function isRunning(string $path): bool
+    public function isRunning(string $path, ?string $appName = null): bool
     {
+        // lando list --format=json queries Docker directly and returns a reliable boolean
+        // `running` field per container — unlike lando info whose `healthy` field can be
+        // the string "unknown" (truthy in PHP) even when the containers are stopped.
+        $lando = $this->getLandoPath();
+        $listOutput = @shell_exec("{$lando} list --format=json 2>/dev/null");
+
+        if ($listOutput) {
+            $list = json_decode($listOutput, true);
+            if (is_array($list)) {
+                // Derive app name from the path's basename as fallback
+                $name = $appName ?? basename($path);
+
+                foreach ($list as $container) {
+                    if (
+                        ($container['app'] ?? '') === $name &&
+                        ($container['kind'] ?? '') === 'app'
+                    ) {
+                        return (bool) ($container['running'] ?? false);
+                    }
+                }
+
+                // App not found in lando list → not initialised / not running
+                return false;
+            }
+        }
+
+        // Fallback: lando info (project-directory-based check)
         $cmd = $this->buildCommand($path, 'info --format=json');
         $output = @shell_exec($cmd.' 2>/dev/null');
 
@@ -177,7 +204,12 @@ class LandoService
 
         foreach ($info as $service) {
             if (($service['service'] ?? '') === 'appserver') {
-                return ($service['healthy'] ?? false) || str_contains($service['state'] ?? '', 'running');
+                // `healthy` can be true (boolean), "healthy" (string), or "unknown" / false.
+                // Treat only strict true or the string "healthy" as actually running.
+                $healthy = $service['healthy'] ?? false;
+                $isHealthy = $healthy === true || (is_string($healthy) && strtolower($healthy) === 'healthy');
+
+                return $isHealthy || str_contains(strtolower($service['state'] ?? ''), 'running');
             }
         }
 
