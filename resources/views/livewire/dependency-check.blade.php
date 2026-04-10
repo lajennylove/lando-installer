@@ -59,7 +59,7 @@
 
             <div class="mt-auto pt-6 flex justify-end">
                 @if($this->allRequiredMet())
-                    <flux:button href="{{ route('home') }}" variant="primary" icon-trailing="arrow-right">
+                    <flux:button href="{{ route('create', [], false) }}" variant="primary" icon-trailing="arrow-right">
                         Continue to Lando Studio
                     </flux:button>
                 @else

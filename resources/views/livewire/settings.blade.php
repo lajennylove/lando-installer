@@ -165,6 +165,19 @@
         </div>
     </div>
 
+    {{-- Import Local Sites --}}
+    <div class="mt-10">
+        <div class="flex items-center justify-between">
+            <div>
+                <flux:heading size="lg">Local Installations</flux:heading>
+                <flux:subheading class="mt-1">Import Lando projects that exist on disk but are not yet tracked in Lando Studio.</flux:subheading>
+            </div>
+            <flux:button href="{{ route('settings.import', [], false) }}" wire:navigate variant="primary" icon="arrow-down-tray">
+                Import local installations
+            </flux:button>
+        </div>
+    </div>
+
     {{-- Remote Sites Section --}}
     <div class="mt-10">
         <div class="flex items-center justify-between">
