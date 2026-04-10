@@ -19,6 +19,21 @@
                 <flux:text class="mt-1 text-zinc-500">Every Lando project in your sites folder is already listed in Lando Studio.</flux:text>
             </div>
         @else
+            <div class="flex items-center justify-between mb-4">
+                <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
+                    {{ count($candidates) }} {{ Str::plural('site', count($candidates)) }} found · Importing adds them to the sidebar without modifying any files on disk.
+                </flux:text>
+                <flux:button
+                    wire:click="importAll"
+                    wire:loading.attr="disabled"
+                    wire:target="importAll"
+                    variant="primary"
+                    icon="arrow-down-tray"
+                >
+                    <span wire:loading.remove wire:target="importAll">Import all</span>
+                    <span wire:loading wire:target="importAll">Importing…</span>
+                </flux:button>
+            </div>
             <div class="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
                 <table class="w-full text-sm">
                     <thead>
@@ -77,10 +92,6 @@
                     </tbody>
                 </table>
             </div>
-
-            <flux:text class="mt-4 text-xs text-zinc-400 dark:text-zinc-500">
-                {{ count($candidates) }} {{ Str::plural('site', count($candidates)) }} found · Importing adds them to the sidebar without modifying any files on disk.
-            </flux:text>
         @endif
     </div>
 </div>

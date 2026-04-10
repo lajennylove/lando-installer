@@ -72,6 +72,44 @@ class ImportSites extends Component
         $this->candidates = $scanner->findUnimported();
     }
 
+    public function importAll(LocalSiteScanner $scanner, SiteManager $siteManager): void
+    {
+        if (empty($this->candidates)) {
+            $this->notifyInfo('No sites to import.');
+
+            return;
+        }
+
+        $count = 0;
+
+        foreach ($this->candidates as $candidate) {
+            if (Site::where('name', $candidate['name'])->exists()) {
+                continue;
+            }
+
+            $dbPort = $candidate['db_port'] ?? $siteManager->allocateDatabaseForwardPort();
+
+            Site::create([
+                'name' => $candidate['name'],
+                'path' => $candidate['path'],
+                'url' => "https://{$candidate['name']}.lndo.site",
+                'admin_url' => "https://{$candidate['name']}.lndo.site/wp-admin",
+                'status' => SiteStatus::Unknown,
+                'php_version' => $candidate['php_version'],
+                'db_version' => $candidate['db_version'],
+                'redis_version' => $candidate['redis_version'],
+                'db_port' => $dbPort,
+            ]);
+
+            $count++;
+        }
+
+        $this->candidates = $scanner->findUnimported();
+
+        $label = $count === 1 ? '1 site' : "{$count} sites";
+        $this->notifySuccess("{$label} imported into Lando Studio.");
+    }
+
     public function render(): View
     {
         return view('livewire.import-sites');
