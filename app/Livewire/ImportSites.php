@@ -67,6 +67,7 @@ class ImportSites extends Component
         $this->importing = array_values(array_diff($this->importing, [$siteName]));
 
         $this->notifySuccess("\"{$siteName}\" has been imported into Lando Studio.");
+        $this->dispatch('site-created')->to(SiteList::class);
 
         // Refresh list — remove the just-imported site
         $this->candidates = $scanner->findUnimported();
@@ -108,6 +109,7 @@ class ImportSites extends Component
 
         $label = $count === 1 ? '1 site' : "{$count} sites";
         $this->notifySuccess("{$label} imported into Lando Studio.");
+        $this->dispatch('site-created')->to(SiteList::class);
     }
 
     public function render(): View
