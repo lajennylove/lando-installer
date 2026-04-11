@@ -1,4 +1,4 @@
-<div @if($actionRunning) wire:poll.3s="pollActionStatus" @endif>
+<div @if($actionRunning || $isExecuting) wire:poll.3s="pollActionStatus" @endif>
     <div class="flex items-start justify-between">
         <div>
             <flux:heading size="xl">{{ $site->name }}</flux:heading>
@@ -61,9 +61,25 @@
         <flux:button wire:click="openInFinder" size="sm" icon="folder-open" :disabled="$actionRunning || $this->isProjectMissingOnDisk()">
             Open Folder
         </flux:button>
-        <flux:button wire:click="confirmDestroy" variant="danger" size="sm" icon="trash" :disabled="$actionRunning">
+        <flux:button wire:click="confirmDestroy" variant="danger" size="sm" icon="trash" :disabled="$actionRunning || $isExecuting">
             Destroy
         </flux:button>
+        @if($site->remote_site_id)
+        <flux:button
+            wire:click="confirmSync"
+            size="sm"
+            icon="arrow-down-tray"
+            variant="filled"
+            :disabled="$actionRunning || $isExecuting || $syncConnectionCheckInProgress"
+        >
+            @if($syncConnectionCheckInProgress)
+                <flux:icon name="arrow-path" class="w-4 h-4 animate-spin" />
+                Checking…
+            @else
+                Sync DB
+            @endif
+        </flux:button>
+        @endif
     </div>
 
     @if($actionRunning)
@@ -218,6 +234,87 @@
         </div>
     @endif
 
+    {{-- Sync terminal (WithCommandExecution step-based output) --}}
+    @if($isExecuting || $terminalOutput)
+        <div class="mt-6">
+            <div class="flex items-center gap-2 mb-2">
+                <flux:heading size="sm">Sync Output</flux:heading>
+                @if($isExecuting)
+                    <div class="flex items-center gap-1.5 text-blue-500 dark:text-blue-400">
+                        <flux:icon name="arrow-path" class="w-3.5 h-3.5 animate-spin" />
+                        <flux:text class="text-xs">Step {{ $currentStep + 1 }} of {{ $totalSteps }}: {{ $steps[$currentStep]['label'] ?? '' }}</flux:text>
+                    </div>
+                @endif
+            </div>
+            <div class="mb-3 flex flex-wrap gap-2">
+                @foreach($steps as $i => $step)
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+                        {{ $step['status'] === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+                           ($step['status'] === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 animate-pulse' :
+                           ($step['status'] === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                           'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400')) }}">
+                        {{ $step['label'] }}
+                    </span>
+                @endforeach
+            </div>
+            <div
+                id="sync-terminal-output"
+                x-data="{ autoScroll: true }"
+                wire:key="site-sync-terminal"
+                @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
+                @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
+                class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg h-72 overflow-y-auto"
+            >
+                @foreach(explode("\n", $terminalOutput ?: 'Preparing sync…') as $line)
+                    <span class="block terminal-line">{!! $line === '' ? '&nbsp;' : \App\Support\AnsiToHtml::lineToHtml($line) !!}</span>
+                @endforeach
+            </div>
+            @if($executionFailed)
+                <div class="mt-3 flex items-center gap-3">
+                    <flux:text class="text-sm text-red-600 dark:text-red-400">Sync failed at step {{ $currentStep + 1 }}.</flux:text>
+                    <flux:button wire:click="retryFromFailedStep" size="sm" variant="primary" icon="arrow-path">Retry step</flux:button>
+                </div>
+            @endif
+        </div>
+    @endif
+
+    {{-- Remote Site Link card --}}
+    @if(!$this->isProjectMissingOnDisk())
+    <div class="mt-8 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+                <flux:heading size="sm">Production Remote</flux:heading>
+                <flux:text class="text-sm text-zinc-500 mt-0.5">
+                    @if($site->remote_site_id)
+                        Linked to <strong>{{ $site->remoteSite?->remote_domain ?? 'unknown' }}</strong>
+                    @else
+                        Not linked to any remote site — link one to enable DB sync.
+                    @endif
+                </flux:text>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <select
+                    wire:model.live="selectedRemoteSiteId"
+                    class="text-sm rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                    <option value="">— unlinked —</option>
+                    @foreach($this->remoteSites as $remote)
+                        <option value="{{ $remote->id }}" @selected($selectedRemoteSiteId == $remote->id)>
+                            {{ $remote->remote_domain }}
+                        </option>
+                    @endforeach
+                </select>
+                <flux:button wire:click="linkRemoteSite" size="sm" variant="primary" icon="link">
+                    {{ $selectedRemoteSiteId ? 'Save link' : 'Unlink' }}
+                </flux:button>
+                @if($site->remote_site_id)
+                    <flux:button wire:click="unlinkRemoteSite" size="sm" variant="ghost" icon="x-mark" />
+                @endif
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Change Password Modal --}}
     <flux:modal wire:model="showPasswordModal" class="max-w-sm">
         <form wire:submit="changePassword" class="space-y-4">
@@ -235,6 +332,35 @@
                 <flux:button type="submit" variant="primary" icon="key">Change Password</flux:button>
             </div>
         </form>
+    </flux:modal>
+
+    {{-- Sync Confirmation Modal --}}
+    <flux:modal wire:model="showSyncModal" class="max-w-lg">
+        <div class="space-y-4">
+            <flux:heading size="lg">Sync Database from Production</flux:heading>
+            <flux:text>
+                This will pull a fresh database dump from
+                <strong>{{ $site->remoteSite?->remote_domain ?? 'production' }}</strong>
+                and import it into your local <strong>{{ $site->name }}</strong> installation.
+            </flux:text>
+            <div class="p-3 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-300">
+                ⚠️ Your local database will be <strong>overwritten</strong>. This cannot be undone.
+            </div>
+            <flux:field>
+                <flux:label>Local theme folder name</flux:label>
+                <flux:description>If your local theme folder name differs from production, enter it here so the search-replace is correct.</flux:description>
+                <flux:input
+                    wire:model="syncLocalTheme"
+                    placeholder="{{ $site->theme_name ?? 'theme-folder-name' }}"
+                />
+            </flux:field>
+            <div class="flex justify-end gap-3 pt-2">
+                <flux:button wire:click="$set('showSyncModal', false)" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="startSync" variant="primary" icon="arrow-down-tray">
+                    Sync Now
+                </flux:button>
+            </div>
+        </div>
     </flux:modal>
 
     {{-- Destroy Confirmation Modal --}}

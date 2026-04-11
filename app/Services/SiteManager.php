@@ -361,4 +361,61 @@ class SiteManager
 
         return "rm -rf '{$site->path}'";
     }
+
+    /**
+     * Steps to sync a fresh database dump from production into an existing local site.
+     *
+     * Reuses the dump → validate → import → wp-config → cleanup → search-replace chain
+     * from getCloneSiteSteps, but skips folder creation, lando start, wp-core-download,
+     * git clone, composer/node/build steps — those already exist locally.
+     *
+     * @param  string|null  $localThemeName  Override for the local theme folder name.
+     *                                        Falls back to $site->theme_name.
+     */
+    public function getSyncSteps(Site $site, RemoteSite $remoteSite, ?string $localThemeName = null): array
+    {
+        $path = $site->path;
+        $localTheme = $localThemeName ?: $site->theme_name ?: null;
+        $dumpFile = "{$path}/dumpfile.sql.gz";
+        $localUrl = "https://{$site->name}.lndo.site";
+
+        $steps = [
+            [
+                'label' => 'Dumping remote database',
+                'hint' => 'Streams SQL over SSH then compresses locally — nothing is written on the remote server. Expect 2–10 minutes depending on database size.',
+                'timeout' => 1200,
+                'command' => $this->ssh->buildMysqldumpCommand($remoteSite, $dumpFile),
+                'step' => 1,
+            ],
+            [
+                'label' => 'Validating dump file',
+                'command' => $this->validateDumpFileCommand($dumpFile),
+                'step' => 2,
+            ],
+            [
+                'label' => 'Importing database',
+                'command' => $this->lando->dbImport($path, 'dumpfile.sql.gz'),
+                'step' => 3,
+            ],
+            [
+                'label' => 'Creating WordPress config',
+                'command' => $this->cloneWpConfigCommand($path, $site),
+                'step' => 4,
+            ],
+            [
+                'label' => 'Cleaning up dump file',
+                'command' => $this->removeDumpFileCommand($dumpFile),
+                'step' => 5,
+            ],
+            [
+                'label' => 'Replacing domain references',
+                'hint' => 'Search-replace prod URL → local URL.',
+                'timeout' => 1200,
+                'command' => $this->lando->wpSearchReplaceImported($path, $localUrl, $localTheme),
+                'step' => 6,
+            ],
+        ];
+
+        return $steps;
+    }
 }

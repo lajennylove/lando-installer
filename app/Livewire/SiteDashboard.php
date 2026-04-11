@@ -3,11 +3,14 @@
 namespace App\Livewire;
 
 use App\Enums\SiteStatus;
+use App\Livewire\Concerns\WithCommandExecution;
 use App\Livewire\Concerns\WithNotifications;
+use App\Models\RemoteSite;
 use App\Models\Site;
 use App\Services\LandoService;
 use App\Services\LandoYamlGenerator;
 use App\Services\PlatformDetector;
+use App\Services\RemoteConnectionVerifier;
 use App\Services\SiteManager;
 use App\Support\LogContentUtf8;
 use Livewire\Attributes\Layout;
@@ -19,6 +22,7 @@ use Native\Laravel\Facades\ChildProcess;
 #[Title('Lando Studio')]
 class SiteDashboard extends Component
 {
+    use WithCommandExecution;
     use WithNotifications;
 
     public Site $site;
@@ -50,6 +54,19 @@ class SiteDashboard extends Component
 
     public array $availableThemes = [];
 
+    // Remote site linking
+    public ?int $selectedRemoteSiteId = null;
+
+    // Sync Remote
+    public bool $showSyncModal = false;
+
+    public string $syncLocalTheme = '';
+
+    public bool $syncConnectionCheckInProgress = false;
+
+    /** Steps cached for WithCommandExecution retry. */
+    private ?array $cachedSyncSteps = null;
+
     public function mount(Site $site): void
     {
         $this->phpVersions = config('lando_dev.defaults.php_versions');
@@ -58,6 +75,8 @@ class SiteDashboard extends Component
 
         $this->site = $site;
         $this->activeTheme = $site->theme_name ?? '';
+        $this->selectedRemoteSiteId = $site->remote_site_id;
+        $this->syncLocalTheme = $site->theme_name ?? '';
         $this->checkRealStatus();
         if (! $this->isProjectMissingOnDisk()) {
             $this->loadAvailableThemes();
@@ -402,6 +421,13 @@ class SiteDashboard extends Component
 
     public function pollActionStatus(): void
     {
+        // Delegate to WithCommandExecution for sync operations
+        if ($this->isExecuting) {
+            $this->checkCommandStatus();
+
+            return;
+        }
+
         if (! $this->actionRunning) {
             return;
         }
@@ -556,6 +582,130 @@ class SiteDashboard extends Component
             cmd: [$platform->shellWrapper(), $platform->shellFlag(), $wrapped],
             alias: 'action-site-'.$this->site->id.'-'.uniqid(),
         );
+    }
+
+    // ── Remote Site Linking ─────────────────────────────────────────────────
+
+    public function getRemoteSitesProperty()
+    {
+        return RemoteSite::orderBy('remote_domain')->get();
+    }
+
+    public function linkRemoteSite(): void
+    {
+        if ($this->selectedRemoteSiteId === null) {
+            $this->unlinkRemoteSite();
+
+            return;
+        }
+
+        if (! RemoteSite::find($this->selectedRemoteSiteId)) {
+            $this->notifyError('Selected remote site not found.');
+
+            return;
+        }
+
+        $this->site->update(['remote_site_id' => $this->selectedRemoteSiteId]);
+        $this->site->refresh();
+        $this->notifySuccess('Remote site linked.');
+    }
+
+    public function unlinkRemoteSite(): void
+    {
+        $this->selectedRemoteSiteId = null;
+        $this->site->update(['remote_site_id' => null]);
+        $this->site->refresh();
+        $this->notifySuccess('Remote site unlinked.');
+    }
+
+    // ── Sync Remote ─────────────────────────────────────────────────────────
+
+    public function confirmSync(): void
+    {
+        if (! $this->site->remote_site_id) {
+            $this->notifyError('Link a remote site first before syncing.');
+
+            return;
+        }
+
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
+        $this->syncLocalTheme = $this->site->theme_name ?? '';
+        $this->showSyncModal = true;
+    }
+
+    public function startSync(): void
+    {
+        $this->showSyncModal = false;
+
+        $remoteSite = RemoteSite::find($this->site->remote_site_id);
+        if (! $remoteSite) {
+            $this->notifyError('Linked remote site no longer exists. Please re-link.');
+
+            return;
+        }
+
+        $this->syncConnectionCheckInProgress = true;
+
+        try {
+            $verify = app(RemoteConnectionVerifier::class)->verify($remoteSite);
+        } catch (\Throwable $e) {
+            $this->syncConnectionCheckInProgress = false;
+            $this->notifyError('Connection check failed: '.$e->getMessage());
+
+            return;
+        }
+
+        $this->syncConnectionCheckInProgress = false;
+
+        if (! $verify->ok) {
+            $this->notifyError("Connection check failed ({$verify->phase}): {$verify->message}. Update credentials in Settings.");
+
+            return;
+        }
+
+        $this->cachedSyncSteps = null;
+        $manager = app(SiteManager::class);
+        $steps = $manager->getSyncSteps($this->site, $remoteSite, $this->syncLocalTheme ?: null);
+
+        $this->executeStepSequence($steps, $this->site);
+    }
+
+    // WithCommandExecution contract ──────────────────────────────────────────
+
+    protected function getSite(): ?Site
+    {
+        return $this->site;
+    }
+
+    protected function getStepDefinitions(): array
+    {
+        if ($this->cachedSyncSteps !== null) {
+            return $this->cachedSyncSteps;
+        }
+
+        $remoteSite = RemoteSite::find($this->site->remote_site_id);
+        if (! $remoteSite) {
+            return [];
+        }
+
+        $this->cachedSyncSteps = app(SiteManager::class)->getSyncSteps(
+            $this->site,
+            $remoteSite,
+            $this->syncLocalTheme ?: null
+        );
+
+        return $this->cachedSyncSteps;
+    }
+
+    protected function onSequenceComplete(Site $site): void
+    {
+        $this->notifySuccess("Database synced from production for '{$site->name}'.");
+        $this->checkRealStatus();
     }
 
     public function getThemeScreenshotProperty(): ?string
