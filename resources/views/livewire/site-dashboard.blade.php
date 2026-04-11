@@ -322,66 +322,110 @@
     <flux:modal wire:model="showNewRemoteModal" class="max-w-xl">
         <form wire:submit="saveNewRemoteSite" class="space-y-4">
             <flux:heading size="lg">Add New Remote Site</flux:heading>
-            <flux:text>Fill in the production server details to create a remote record and link it to <strong>{{ $site->name }}</strong>.</flux:text>
+            <flux:text>Fill in the production server details. The remote will be created and linked to <strong>{{ $site->name }}</strong>.</flux:text>
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <flux:field class="sm:col-span-2">
-                    <flux:label>Production domain</flux:label>
-                    <flux:input wire:model="newRemoteDomain" placeholder="example.com" />
+            <div class="grid grid-cols-2 gap-4">
+                <flux:field>
+                    <flux:label>Remote Domain</flux:label>
+                    <flux:input wire:model="newRemoteDomain" placeholder="https://example.com" />
                     <flux:error name="newRemoteDomain" />
                 </flux:field>
-
                 <flux:field>
-                    <flux:label>SSH server IP / hostname</flux:label>
-                    <flux:input wire:model="newRemoteSshIp" placeholder="1.2.3.4" />
-                    <flux:error name="newRemoteSshIp" />
-                </flux:field>
-
-                <flux:field>
-                    <flux:label>SSH user</flux:label>
-                    <flux:input wire:model="newRemoteSshUser" placeholder="forge" />
-                    <flux:error name="newRemoteSshUser" />
-                </flux:field>
-
-                <flux:field class="sm:col-span-2">
-                    <flux:label>SSH password / key passphrase</flux:label>
-                    <flux:description>Leave blank if using key-based auth without a passphrase.</flux:description>
-                    <flux:input wire:model="newRemoteSshPassword" type="password" placeholder="(optional)" />
-                </flux:field>
-
-                <flux:field>
-                    <flux:label>Database name</flux:label>
-                    <flux:input wire:model="newRemoteDbName" placeholder="wp_production" />
-                    <flux:error name="newRemoteDbName" />
-                </flux:field>
-
-                <flux:field>
-                    <flux:label>Database user</flux:label>
-                    <flux:input wire:model="newRemoteDbUser" placeholder="wp_user" />
-                    <flux:error name="newRemoteDbUser" />
-                </flux:field>
-
-                <flux:field class="sm:col-span-2">
-                    <flux:label>Database password</flux:label>
-                    <flux:input wire:model="newRemoteDbPassword" type="password" placeholder="(optional)" />
-                </flux:field>
-
-                <flux:field>
-                    <flux:label>Theme folder name</flux:label>
-                    <flux:description>Production theme folder, used for search-replace during sync.</flux:description>
-                    <flux:input wire:model="newRemoteThemeName" placeholder="my-theme" />
-                </flux:field>
-
-                <flux:field>
-                    <flux:label>Remote WordPress path</flux:label>
-                    <flux:description>Absolute path on the server (e.g. <code>/var/www/html</code>).</flux:description>
-                    <flux:input wire:model="newRemotePath" placeholder="/var/www/html" />
+                    <flux:label for="new-remote-local-site-name">Local site name</flux:label>
+                    <div class="flex h-10 items-stretch overflow-hidden rounded-lg shadow-xs border border-zinc-200 border-b-zinc-300/80 bg-white divide-x divide-zinc-200 dark:divide-white/10 dark:border-white/10 dark:border-b-white/5 dark:bg-white/10 focus-within:ring-2 focus-within:ring-zinc-400/30 focus-within:border-zinc-300 dark:focus-within:ring-white/20 dark:focus-within:border-white/20">
+                        <span class="inline-flex items-center px-3 text-xs font-mono text-zinc-500 bg-zinc-50 select-none sm:text-sm dark:text-zinc-400 dark:bg-zinc-900/50" aria-hidden="true">https://</span>
+                        <input
+                            id="new-remote-local-site-name"
+                            type="text"
+                            wire:model="newRemoteLocalSiteName"
+                            placeholder="my-site"
+                            autocomplete="off"
+                            class="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-zinc-700 placeholder-zinc-400 focus:ring-0 dark:text-zinc-200 dark:placeholder-zinc-500"
+                        />
+                        <span class="inline-flex items-center px-3 text-xs font-mono text-zinc-500 bg-zinc-50 select-none sm:text-sm dark:text-zinc-400 dark:bg-zinc-900/50" aria-hidden="true">.lndo.site</span>
+                    </div>
+                    <flux:description>Optional. Leave blank if you do not need a preset.</flux:description>
+                    <flux:error name="newRemoteLocalSiteName" />
                 </flux:field>
             </div>
 
-            <div class="flex justify-end gap-3 pt-2">
+            <flux:separator />
+            <flux:heading size="xs">SSH Access</flux:heading>
+
+            <div class="grid grid-cols-3 gap-4">
+                <flux:field>
+                    <flux:label>SSH Server IP</flux:label>
+                    <flux:input wire:model="newRemoteSshIp" placeholder="192.168.1.1" />
+                    <flux:error name="newRemoteSshIp" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>SSH User</flux:label>
+                    <flux:input wire:model="newRemoteSshUser" />
+                    <flux:error name="newRemoteSshUser" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>SSH Password</flux:label>
+                    <flux:input wire:model="newRemoteSshPassword" type="password" />
+                </flux:field>
+            </div>
+
+            <flux:field>
+                <flux:label>WordPress root path (on server)</flux:label>
+                <flux:input
+                    wire:model="newRemotePath"
+                    placeholder="/home/master/applications/pphhzzudbv/public_html"
+                    class="font-mono text-sm"
+                />
+                <flux:description>
+                    Absolute path to the folder that contains <code class="text-xs">wp-config.php</code> (run <code class="text-xs">pwd</code> after <code class="text-xs">cd …/public_html</code>).
+                </flux:description>
+                <flux:error name="newRemotePath" />
+            </flux:field>
+
+            <flux:separator />
+            <flux:heading size="xs">Database</flux:heading>
+
+            <div class="grid grid-cols-3 gap-4">
+                <flux:field>
+                    <flux:label>DB Name</flux:label>
+                    <flux:input wire:model="newRemoteDbName" />
+                    <flux:error name="newRemoteDbName" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>DB User</flux:label>
+                    <flux:input wire:model="newRemoteDbUser" />
+                    <flux:error name="newRemoteDbUser" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>DB Password</flux:label>
+                    <flux:input wire:model="newRemoteDbPassword" type="password" />
+                </flux:field>
+            </div>
+
+            <flux:separator />
+            <flux:heading size="xs">Theme</flux:heading>
+
+            <div class="grid grid-cols-2 gap-4">
+                <flux:field>
+                    <flux:label>Theme Name</flux:label>
+                    <flux:input wire:model="newRemoteThemeName" placeholder="my-theme" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>Git Repo URL</flux:label>
+                    <flux:input wire:model.live.debounce.300ms="newRemoteRepoUrl" placeholder="https://github.com/..." />
+                </flux:field>
+            </div>
+
+            @if(filled(trim($newRemoteRepoUrl)))
+                <div class="space-y-2">
+                    <flux:checkbox wire:model="newRemoteInstallComposer" label="Install Composer dependencies" />
+                    <flux:checkbox wire:model="newRemoteInstallNode" label="Install Node dependencies" />
+                </div>
+            @endif
+
+            <div class="flex items-center gap-3 pt-2">
+                <flux:button type="submit" variant="primary">Save &amp; Link</flux:button>
                 <flux:button wire:click="$set('showNewRemoteModal', false)" variant="ghost">Cancel</flux:button>
-                <flux:button type="submit" variant="primary" icon="server">Save &amp; Link</flux:button>
             </div>
         </form>
     </flux:modal>

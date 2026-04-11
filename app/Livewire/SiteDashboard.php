@@ -13,6 +13,7 @@ use App\Services\PlatformDetector;
 use App\Services\RemoteConnectionVerifier;
 use App\Services\SiteManager;
 use App\Support\LogContentUtf8;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -62,11 +63,15 @@ class SiteDashboard extends Component
 
     public string $newRemoteDomain = '';
 
+    public string $newRemoteLocalSiteName = '';
+
     public string $newRemoteSshIp = '';
 
     public string $newRemoteSshUser = '';
 
     public string $newRemoteSshPassword = '';
+
+    public string $newRemotePath = '';
 
     public string $newRemoteDbName = '';
 
@@ -76,7 +81,11 @@ class SiteDashboard extends Component
 
     public string $newRemoteThemeName = '';
 
-    public string $newRemotePath = '';
+    public string $newRemoteRepoUrl = '';
+
+    public bool $newRemoteInstallComposer = false;
+
+    public bool $newRemoteInstallNode = false;
 
     // Sync Remote
     public bool $showSyncModal = false;
@@ -642,44 +651,59 @@ class SiteDashboard extends Component
     public function openNewRemoteModal(): void
     {
         $this->newRemoteDomain = '';
+        $this->newRemoteLocalSiteName = '';
         $this->newRemoteSshIp = '';
         $this->newRemoteSshUser = '';
         $this->newRemoteSshPassword = '';
+        $this->newRemotePath = '';
         $this->newRemoteDbName = '';
         $this->newRemoteDbUser = '';
         $this->newRemoteDbPassword = '';
         $this->newRemoteThemeName = $this->site->theme_name ?? '';
-        $this->newRemotePath = '';
+        $this->newRemoteRepoUrl = '';
+        $this->newRemoteInstallComposer = false;
+        $this->newRemoteInstallNode = false;
         $this->showNewRemoteModal = true;
     }
 
     public function saveNewRemoteSite(): void
     {
         $this->validate([
-            'newRemoteDomain' => 'required|string|max:255',
-            'newRemoteSshIp' => 'required|string|max:255',
-            'newRemoteSshUser' => 'required|string|max:255',
-            'newRemoteDbName' => 'required|string|max:255',
-            'newRemoteDbUser' => 'required|string|max:255',
+            'newRemoteDomain' => 'required|url',
+            'newRemoteLocalSiteName' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9\s\-]+$/'],
+            'newRemoteSshIp' => 'required|string',
+            'newRemoteSshUser' => 'required|string',
+            'newRemotePath' => 'required|string|max:512',
+            'newRemoteDbName' => 'required|string',
+            'newRemoteDbUser' => 'required|string',
         ], [], [
-            'newRemoteDomain' => 'domain',
+            'newRemoteDomain' => 'remote domain',
+            'newRemoteLocalSiteName' => 'local site name',
             'newRemoteSshIp' => 'SSH server IP',
             'newRemoteSshUser' => 'SSH user',
-            'newRemoteDbName' => 'database name',
-            'newRemoteDbUser' => 'database user',
+            'newRemotePath' => 'WordPress root path',
+            'newRemoteDbName' => 'DB name',
+            'newRemoteDbUser' => 'DB user',
         ]);
+
+        $repoUrl = $this->newRemoteRepoUrl ?: null;
+        $localSlug = Str::slug(trim($this->newRemoteLocalSiteName));
+        $localDomain = $localSlug !== '' ? "https://{$localSlug}.lndo.site" : null;
 
         $remote = RemoteSite::create([
             'remote_domain' => $this->newRemoteDomain,
-            'local_domain' => $this->site->domain ?? ($this->site->name.'.lndo.site'),
+            'local_domain' => $localDomain,
             'ssh_server_ip' => $this->newRemoteSshIp,
             'ssh_user' => $this->newRemoteSshUser,
             'ssh_password' => $this->newRemoteSshPassword ?: null,
+            'remote_path' => rtrim($this->newRemotePath),
             'db_name' => $this->newRemoteDbName,
             'db_user' => $this->newRemoteDbUser,
             'db_password' => $this->newRemoteDbPassword ?: null,
             'theme_name' => $this->newRemoteThemeName ?: null,
-            'remote_path' => $this->newRemotePath ?: null,
+            'repo_url' => $repoUrl,
+            'install_composer_dependencies' => $repoUrl && $this->newRemoteInstallComposer,
+            'install_node_dependencies' => $repoUrl && $this->newRemoteInstallNode,
         ]);
 
         $this->site->update(['remote_site_id' => $remote->id]);
