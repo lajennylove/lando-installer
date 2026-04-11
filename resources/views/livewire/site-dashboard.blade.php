@@ -391,11 +391,12 @@
                     <flux:label>Theme Name</flux:label>
                     <flux:input wire:model="newRemoteThemeName" placeholder="my-theme" />
                 </flux:field>
-                <flux:field>
-                    <flux:label>Git Repo URL</flux:label>
-                    <flux:input wire:model.live.debounce.300ms="newRemoteRepoUrl" placeholder="https://github.com/..." />
-                </flux:field>
             </div>
+
+            <flux:field>
+                <flux:label>Git Repo URL</flux:label>
+                <flux:input wire:model.live.debounce.300ms="newRemoteRepoUrl" placeholder="https://github.com/..." />
+            </flux:field>
 
             @if(filled(trim($newRemoteRepoUrl)))
                 <div class="space-y-2">
