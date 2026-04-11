@@ -57,6 +57,27 @@ class SiteDashboard extends Component
     // Remote site linking
     public ?int $selectedRemoteSiteId = null;
 
+    // New Remote Site form
+    public bool $showNewRemoteModal = false;
+
+    public string $newRemoteDomain = '';
+
+    public string $newRemoteSshIp = '';
+
+    public string $newRemoteSshUser = '';
+
+    public string $newRemoteSshPassword = '';
+
+    public string $newRemoteDbName = '';
+
+    public string $newRemoteDbUser = '';
+
+    public string $newRemoteDbPassword = '';
+
+    public string $newRemoteThemeName = '';
+
+    public string $newRemotePath = '';
+
     // Sync Remote
     public bool $showSyncModal = false;
 
@@ -616,6 +637,56 @@ class SiteDashboard extends Component
         $this->site->update(['remote_site_id' => null]);
         $this->site->refresh();
         $this->notifySuccess('Remote site unlinked.');
+    }
+
+    public function openNewRemoteModal(): void
+    {
+        $this->newRemoteDomain = '';
+        $this->newRemoteSshIp = '';
+        $this->newRemoteSshUser = '';
+        $this->newRemoteSshPassword = '';
+        $this->newRemoteDbName = '';
+        $this->newRemoteDbUser = '';
+        $this->newRemoteDbPassword = '';
+        $this->newRemoteThemeName = $this->site->theme_name ?? '';
+        $this->newRemotePath = '';
+        $this->showNewRemoteModal = true;
+    }
+
+    public function saveNewRemoteSite(): void
+    {
+        $this->validate([
+            'newRemoteDomain' => 'required|string|max:255',
+            'newRemoteSshIp' => 'required|string|max:255',
+            'newRemoteSshUser' => 'required|string|max:255',
+            'newRemoteDbName' => 'required|string|max:255',
+            'newRemoteDbUser' => 'required|string|max:255',
+        ], [], [
+            'newRemoteDomain' => 'domain',
+            'newRemoteSshIp' => 'SSH server IP',
+            'newRemoteSshUser' => 'SSH user',
+            'newRemoteDbName' => 'database name',
+            'newRemoteDbUser' => 'database user',
+        ]);
+
+        $remote = RemoteSite::create([
+            'remote_domain' => $this->newRemoteDomain,
+            'local_domain' => $this->site->domain ?? ($this->site->name.'.lndo.site'),
+            'ssh_server_ip' => $this->newRemoteSshIp,
+            'ssh_user' => $this->newRemoteSshUser,
+            'ssh_password' => $this->newRemoteSshPassword ?: null,
+            'db_name' => $this->newRemoteDbName,
+            'db_user' => $this->newRemoteDbUser,
+            'db_password' => $this->newRemoteDbPassword ?: null,
+            'theme_name' => $this->newRemoteThemeName ?: null,
+            'remote_path' => $this->newRemotePath ?: null,
+        ]);
+
+        $this->site->update(['remote_site_id' => $remote->id]);
+        $this->site->refresh();
+        $this->selectedRemoteSiteId = $remote->id;
+        $this->showNewRemoteModal = false;
+        $this->notifySuccess("Remote site '{$remote->remote_domain}' created and linked.");
     }
 
     // ── Sync Remote ─────────────────────────────────────────────────────────
