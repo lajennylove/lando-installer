@@ -57,16 +57,40 @@
                 @endforeach
             </div>
 
-            <div class="mt-auto pt-6 flex justify-end">
-                @if($this->allRequiredMet())
-                    <flux:button href="{{ route('create', [], false) }}" variant="primary" icon-trailing="arrow-right">
-                        Continue to Lando Studio
+            <div class="mt-auto pt-6 space-y-3">
+                {{-- Lando setup: installs all Lando plugins (wordpress recipe, etc.) --}}
+                <div class="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+                    <div>
+                        <flux:heading size="sm">Lando Plugins</flux:heading>
+                        <flux:text class="text-sm text-zinc-500">Install all required Lando plugins & recipes (e.g. WordPress)</flux:text>
+                    </div>
+                    <flux:button
+                        wire:click="runLandoSetup"
+                        size="sm"
+                        variant="filled"
+                        icon="puzzle-piece"
+                        :disabled="$installing || !($dependencies['lando']['installed'] ?? false)"
+                    >
+                        @if($installing && $installingDep === 'lando-setup')
+                            <flux:icon name="arrow-path" class="w-4 h-4 animate-spin" />
+                            Running…
+                        @else
+                            Run lando setup
+                        @endif
                     </flux:button>
-                @else
-                    <flux:button disabled variant="primary" icon-trailing="arrow-right">
-                        Install required dependencies to continue
-                    </flux:button>
-                @endif
+                </div>
+
+                <div class="flex justify-end">
+                    @if($this->allRequiredMet())
+                        <flux:button href="{{ route('create', [], false) }}" variant="primary" icon-trailing="arrow-right">
+                            Continue to Lando Studio
+                        </flux:button>
+                    @else
+                        <flux:button disabled variant="primary" icon-trailing="arrow-right">
+                            Install required dependencies to continue
+                        </flux:button>
+                    @endif
+                </div>
             </div>
         </div>
 
