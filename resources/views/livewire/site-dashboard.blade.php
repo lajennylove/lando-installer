@@ -324,30 +324,11 @@
             <flux:heading size="lg">Add New Remote Site</flux:heading>
             <flux:text>Fill in the production server details. The remote will be created and linked to <strong>{{ $site->name }}</strong>.</flux:text>
 
-            <div class="grid grid-cols-2 gap-4">
-                <flux:field>
+            <flux:field>
                     <flux:label>Remote Domain</flux:label>
                     <flux:input wire:model="newRemoteDomain" placeholder="https://example.com" />
                     <flux:error name="newRemoteDomain" />
                 </flux:field>
-                <flux:field>
-                    <flux:label for="new-remote-local-site-name">Local site name</flux:label>
-                    <div class="flex h-10 items-stretch overflow-hidden rounded-lg shadow-xs border border-zinc-200 border-b-zinc-300/80 bg-white divide-x divide-zinc-200 dark:divide-white/10 dark:border-white/10 dark:border-b-white/5 dark:bg-white/10 focus-within:ring-2 focus-within:ring-zinc-400/30 focus-within:border-zinc-300 dark:focus-within:ring-white/20 dark:focus-within:border-white/20">
-                        <span class="inline-flex items-center px-3 text-xs font-mono text-zinc-500 bg-zinc-50 select-none sm:text-sm dark:text-zinc-400 dark:bg-zinc-900/50" aria-hidden="true">https://</span>
-                        <input
-                            id="new-remote-local-site-name"
-                            type="text"
-                            wire:model="newRemoteLocalSiteName"
-                            placeholder="my-site"
-                            autocomplete="off"
-                            class="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-zinc-700 placeholder-zinc-400 focus:ring-0 dark:text-zinc-200 dark:placeholder-zinc-500"
-                        />
-                        <span class="inline-flex items-center px-3 text-xs font-mono text-zinc-500 bg-zinc-50 select-none sm:text-sm dark:text-zinc-400 dark:bg-zinc-900/50" aria-hidden="true">.lndo.site</span>
-                    </div>
-                    <flux:description>Optional. Leave blank if you do not need a preset.</flux:description>
-                    <flux:error name="newRemoteLocalSiteName" />
-                </flux:field>
-            </div>
 
             <flux:separator />
             <flux:heading size="xs">SSH Access</flux:heading>
