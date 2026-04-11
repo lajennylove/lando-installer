@@ -6,10 +6,14 @@ use App\Livewire\Concerns\WithNotifications;
 use App\Models\RemoteSite;
 use App\Models\UserPreference;
 use App\Services\ApplicationDatabaseReset;
+use App\Services\DependencyChecker;
+use App\Services\PlatformDetector;
+use App\Support\LogContentUtf8;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Native\Laravel\Facades\ChildProcess;
 
 #[Layout('components.layouts.app')]
 #[Title('Lando Studio')]
@@ -34,6 +38,13 @@ class Settings extends Component
     public array $redisVersions = [];
 
     public string $defaultCodePath = '';
+
+    // Lando update
+    public bool $landoUpdating = false;
+
+    public string $landoUpdateOutput = '';
+
+    public string $landoUpdateLogFile = '';
 
     // Remote site form
     public bool $showRemoteSiteForm = false;
@@ -324,6 +335,65 @@ class Settings extends Component
     public function databaseLocationRows(): array
     {
         return ApplicationDatabaseReset::sqliteLocationsForDisplay();
+    }
+
+    public function runLandoUpdate(): void
+    {
+        $checker = app(DependencyChecker::class);
+
+        if (! $checker->isLandoInstalled()) {
+            $this->notifyError('Lando must be installed before running an update.');
+
+            return;
+        }
+
+        $platform = app(PlatformDetector::class);
+        $lando = $checker->getLandoPath() ?? 'lando';
+        $marker = '[Lando Studio] lando update finished';
+
+        $this->landoUpdating = true;
+        $this->landoUpdateOutput = '';
+        $this->landoUpdateLogFile = storage_path('logs/lando_update.log');
+
+        @unlink($this->landoUpdateLogFile);
+        file_put_contents($this->landoUpdateLogFile, "[Lando Studio] Running: {$lando} update -y\n");
+
+        if ($platform->isWindows()) {
+            $log = addslashes($this->landoUpdateLogFile);
+            $cmd = [...$platform->powershellArgs(), "& \"{$lando}\" update -y *> '{$log}'; Add-Content -Path '{$log}' -Value \"{$marker}\""];
+        } else {
+            $logArg = escapeshellarg($this->landoUpdateLogFile);
+            $markerArg = escapeshellarg($marker);
+            $command = escapeshellarg($lando)." update -y > {$logArg} 2>&1; echo {$markerArg} >> {$logArg}";
+            $cmd = [$platform->shellWrapper(), $platform->shellFlag(), $command];
+        }
+
+        try {
+            ChildProcess::start(cmd: $cmd, alias: 'lando-update');
+        } catch (\Throwable $e) {
+            $this->landoUpdating = false;
+            $this->landoUpdateOutput = '[Lando Studio ERROR] Failed to start lando update: '.$e->getMessage();
+        }
+    }
+
+    public function pollLandoUpdate(): void
+    {
+        if (! $this->landoUpdating) {
+            return;
+        }
+
+        if ($this->landoUpdateLogFile && file_exists($this->landoUpdateLogFile)) {
+            $raw = file_get_contents($this->landoUpdateLogFile) ?: '';
+            $this->landoUpdateOutput = mb_substr(LogContentUtf8::forLivewire($raw), -6000);
+            $this->dispatch('landodev-scroll-terminal');
+        }
+
+        if (str_contains($this->landoUpdateOutput, '[Lando Studio] lando update finished')) {
+            $this->landoUpdating = false;
+            $this->landoUpdateLogFile = '';
+            $this->dispatch('landodev-scroll-terminal');
+            $this->notifySuccess('Lando updated successfully!');
+        }
     }
 
     public function render()

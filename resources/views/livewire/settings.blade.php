@@ -1,4 +1,4 @@
-<div>
+<div @if($landoUpdating) wire:poll.3s="pollLandoUpdate" @endif>
     <flux:heading size="xl">Settings</flux:heading>
     <flux:subheading class="mt-1">Configure Lando Studio defaults and remote sites</flux:subheading>
 
@@ -124,10 +124,52 @@
                 <flux:heading size="lg">System Dependencies</flux:heading>
                 <flux:subheading class="mt-1">Lando and Docker are required to run local sites.</flux:subheading>
             </div>
-            <flux:button href="{{ route('setup') }}" variant="primary" icon="wrench-screwdriver">
-                Manage Dependencies
-            </flux:button>
+            <div class="flex items-center gap-2">
+                <flux:button
+                    wire:click="runLandoUpdate"
+                    wire:loading.attr="disabled"
+                    wire:target="runLandoUpdate"
+                    variant="filled"
+                    icon="arrow-up-circle"
+                    :disabled="$landoUpdating"
+                >
+                    @if($landoUpdating)
+                        <flux:icon name="arrow-path" class="w-4 h-4 animate-spin" />
+                        Updating…
+                    @else
+                        Update Lando
+                    @endif
+                </flux:button>
+                <flux:button href="{{ route('setup') }}" variant="primary" icon="wrench-screwdriver">
+                    Manage Dependencies
+                </flux:button>
+            </div>
         </div>
+
+        @if($landoUpdating || $landoUpdateOutput !== '')
+            <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <flux:text class="text-xs text-zinc-500">Update log</flux:text>
+                    @if($landoUpdating)
+                        <div class="flex items-center gap-1.5 text-blue-500 dark:text-blue-400">
+                            <flux:icon name="arrow-path" class="w-3.5 h-3.5 animate-spin" />
+                            <flux:text class="text-xs">Running lando update -y…</flux:text>
+                        </div>
+                    @endif
+                </div>
+                <div
+                    id="lando-update-output"
+                    x-data="{ autoScroll: true }"
+                    @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
+                    @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
+                    class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg overflow-y-auto max-h-64"
+                >
+                    @foreach(explode("\n", $landoUpdateOutput ?: 'Starting…') as $line)
+                        <span class="block">{!! $line === '' ? '&nbsp;' : \App\Support\AnsiToHtml::lineToHtml($line) !!}</span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 
     {{-- Application data (SQLite) — sidebar reads sites table; deleting folders/Docker does not remove rows --}}
