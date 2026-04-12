@@ -91,6 +91,46 @@
         </div>
     @endif
 
+    {{-- Remote Site Link card --}}
+    @if(!$this->isProjectMissingOnDisk())
+    <div class="mt-6 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+                <flux:heading size="sm">Production Remote</flux:heading>
+                <flux:text class="text-sm text-zinc-500 mt-0.5">
+                    @if($site->remote_site_id)
+                        Linked to <strong>{{ $site->remoteSite?->remote_domain ?? 'unknown' }}</strong>
+                    @else
+                        Not linked to any remote site — link one to enable DB sync.
+                    @endif
+                </flux:text>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <select
+                    wire:model.live="selectedRemoteSiteId"
+                    class="text-sm rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                    <option value="">— unlinked —</option>
+                    @foreach($this->remoteSites as $remote)
+                        <option value="{{ $remote->id }}" @selected($selectedRemoteSiteId == $remote->id)>
+                            {{ $remote->remote_domain }}
+                        </option>
+                    @endforeach
+                </select>
+                <flux:button wire:click="linkRemoteSite" size="sm" variant="primary" icon="link">
+                    {{ $selectedRemoteSiteId ? 'Save link' : 'Unlink' }}
+                </flux:button>
+                <flux:button wire:click="openNewRemoteModal" size="sm" variant="ghost" icon="plus" title="Create new remote site">
+                    New
+                </flux:button>
+                @if($site->remote_site_id)
+                    <flux:button wire:click="unlinkRemoteSite" size="sm" variant="ghost" icon="x-mark" />
+                @endif
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Site Details --}}
     <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="space-y-4">
@@ -276,46 +316,6 @@
                 </div>
             @endif
         </div>
-    @endif
-
-    {{-- Remote Site Link card --}}
-    @if(!$this->isProjectMissingOnDisk())
-    <div class="mt-8 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700">
-        <div class="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-                <flux:heading size="sm">Production Remote</flux:heading>
-                <flux:text class="text-sm text-zinc-500 mt-0.5">
-                    @if($site->remote_site_id)
-                        Linked to <strong>{{ $site->remoteSite?->remote_domain ?? 'unknown' }}</strong>
-                    @else
-                        Not linked to any remote site — link one to enable DB sync.
-                    @endif
-                </flux:text>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap">
-                <select
-                    wire:model.live="selectedRemoteSiteId"
-                    class="text-sm rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                    <option value="">— unlinked —</option>
-                    @foreach($this->remoteSites as $remote)
-                        <option value="{{ $remote->id }}" @selected($selectedRemoteSiteId == $remote->id)>
-                            {{ $remote->remote_domain }}
-                        </option>
-                    @endforeach
-                </select>
-                <flux:button wire:click="linkRemoteSite" size="sm" variant="primary" icon="link">
-                    {{ $selectedRemoteSiteId ? 'Save link' : 'Unlink' }}
-                </flux:button>
-                <flux:button wire:click="openNewRemoteModal" size="sm" variant="ghost" icon="plus" title="Create new remote site">
-                    New
-                </flux:button>
-                @if($site->remote_site_id)
-                    <flux:button wire:click="unlinkRemoteSite" size="sm" variant="ghost" icon="x-mark" />
-                @endif
-            </div>
-        </div>
-    </div>
     @endif
 
     {{-- New Remote Site Modal --}}
