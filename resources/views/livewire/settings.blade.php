@@ -422,7 +422,7 @@
     </flux:modal>
 
     {{-- Batch Import / Export Modal --}}
-    <flux:modal wire:model="showBatchModal" class="w-full max-w-[calc(100vw-2rem)]">
+    <flux:modal wire:model="showBatchModal" class="w-[80vw]">
         <div class="space-y-4">
             <flux:heading size="lg">Batch Import / Export</flux:heading>
 
