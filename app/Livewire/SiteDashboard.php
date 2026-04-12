@@ -202,6 +202,7 @@ class SiteDashboard extends Component
 
             return;
         }
+        app(SiteManager::class)->ensurePortAvailable($this->site);
         $this->runAction('Starting', app(LandoService::class)->start($this->site->path));
     }
 
