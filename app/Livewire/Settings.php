@@ -13,12 +13,14 @@ use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Native\Laravel\Facades\ChildProcess;
 
 #[Layout('components.layouts.app')]
 #[Title('Lando Studio')]
 class Settings extends Component
 {
+    use WithFileUploads;
     use WithNotifications;
 
     /** App appearance: 'system' | 'light' | 'dark'. Stored in user_preferences. */
@@ -84,6 +86,20 @@ class Settings extends Component
     public ?int $deletingRemoteSiteId = null;
 
     public bool $showResetAppDataModal = false;
+
+    // Batch import/export
+    public bool $showBatchModal = false;
+
+    /** @var mixed Livewire temp upload */
+    public $batchCsvFile = null;
+
+    public array $batchRows = [];
+
+    public bool $batchSelectAll = true;
+
+    public bool $batchParseError = false;
+
+    public string $batchParseErrorMessage = '';
 
     public function mount(): void
     {
@@ -394,6 +410,190 @@ class Settings extends Component
             $this->dispatch('landodev-scroll-terminal');
             $this->notifySuccess('Lando updated successfully!');
         }
+    }
+
+    public function openBatchModal(): void
+    {
+        $this->batchRows = [];
+        $this->batchCsvFile = null;
+        $this->batchParseError = false;
+        $this->batchParseErrorMessage = '';
+        $this->batchSelectAll = true;
+        $this->showBatchModal = true;
+    }
+
+    public function exportRemoteSites(): mixed
+    {
+        $remotes = RemoteSite::all();
+        $headers = [
+            'remote_domain', 'local_domain', 'ssh_server_ip', 'ssh_user', 'ssh_password',
+            'remote_path', 'db_name', 'db_user', 'db_password', 'theme_name', 'repo_url',
+            'install_composer_dependencies', 'install_node_dependencies',
+        ];
+
+        $isDemo = $remotes->isEmpty();
+        $filename = $isDemo ? 'remote-sites-template.csv' : 'remote-sites-export.csv';
+
+        return response()->streamDownload(function () use ($remotes, $headers, $isDemo) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $headers, '|');
+
+            if ($isDemo) {
+                fputcsv($out, [
+                    'https://example.com', 'https://my-site.lndo.site',
+                    '1.2.3.4', 'forge', 'secret',
+                    '/home/forge/example.com/public', 'wp_production',
+                    'wp_user', 'db_password', 'my-theme',
+                    'https://github.com/org/theme', '0', '0',
+                ], '|');
+            } else {
+                foreach ($remotes as $r) {
+                    fputcsv($out, [
+                        $r->remote_domain, $r->local_domain ?? '',
+                        $r->ssh_server_ip, $r->ssh_user, $r->ssh_password ?? '',
+                        $r->remote_path ?? '', $r->db_name, $r->db_user,
+                        $r->db_password ?? '', $r->theme_name ?? '',
+                        $r->repo_url ?? '',
+                        $r->install_composer_dependencies ? '1' : '0',
+                        $r->install_node_dependencies ? '1' : '0',
+                    ], '|');
+                }
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/plain']);
+    }
+
+    public function updatedBatchCsvFile(): void
+    {
+        $this->parseBatchCsv();
+    }
+
+    private function parseBatchCsv(): void
+    {
+        $this->batchRows = [];
+        $this->batchParseError = false;
+
+        $path = $this->batchCsvFile->getRealPath();
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+        $expectedHeaders = [
+            'remote_domain', 'local_domain', 'ssh_server_ip', 'ssh_user', 'ssh_password',
+            'remote_path', 'db_name', 'db_user', 'db_password', 'theme_name', 'repo_url',
+            'install_composer_dependencies', 'install_node_dependencies',
+        ];
+
+        $headers = str_getcsv(array_shift($lines), '|');
+        if ($headers !== $expectedHeaders) {
+            $this->batchParseError = true;
+            $this->batchParseErrorMessage = 'CSV headers do not match the expected format. Please use the template.';
+
+            return;
+        }
+
+        $existing = RemoteSite::all()->keyBy('remote_domain');
+
+        foreach ($lines as $line) {
+            $values = str_getcsv($line, '|');
+            if (count($values) !== count($expectedHeaders)) {
+                continue;
+            }
+
+            $row = array_combine($expectedHeaders, $values);
+            $existingRecord = $existing->get($row['remote_domain']);
+            $changedFields = [];
+
+            if ($existingRecord) {
+                $checkFields = [
+                    'local_domain', 'ssh_server_ip', 'ssh_user', 'remote_path',
+                    'db_name', 'db_user', 'theme_name', 'repo_url',
+                    'install_composer_dependencies', 'install_node_dependencies',
+                ];
+
+                foreach ($checkFields as $field) {
+                    $csvVal = $field === 'install_composer_dependencies' || $field === 'install_node_dependencies'
+                        ? (bool) (int) $row[$field]
+                        : ($row[$field] ?: null);
+                    $dbVal = $existingRecord->$field;
+                    if ((string) $csvVal !== (string) $dbVal) {
+                        $changedFields[] = $field;
+                    }
+                }
+
+                foreach (['ssh_password', 'db_password'] as $passField) {
+                    if (! empty($row[$passField])) {
+                        $changedFields[] = $passField;
+                    }
+                }
+            }
+
+            $this->batchRows[] = [
+                'data' => $row,
+                'exists' => $existingRecord !== null,
+                'existingId' => $existingRecord?->id,
+                'changedFields' => $changedFields,
+                'selected' => true,
+            ];
+        }
+    }
+
+    public function toggleBatchSelectAll(): void
+    {
+        foreach ($this->batchRows as $i => $row) {
+            $this->batchRows[$i]['selected'] = $this->batchSelectAll;
+        }
+    }
+
+    public function executeBatchImport(): void
+    {
+        $created = 0;
+        $updated = 0;
+
+        foreach ($this->batchRows as $row) {
+            if (! $row['selected']) {
+                continue;
+            }
+
+            $data = [
+                'remote_domain' => $row['data']['remote_domain'],
+                'local_domain' => $row['data']['local_domain'] ?: null,
+                'ssh_server_ip' => $row['data']['ssh_server_ip'],
+                'ssh_user' => $row['data']['ssh_user'],
+                'remote_path' => $row['data']['remote_path'] ?: null,
+                'db_name' => $row['data']['db_name'],
+                'db_user' => $row['data']['db_user'],
+                'theme_name' => $row['data']['theme_name'] ?: null,
+                'repo_url' => $row['data']['repo_url'] ?: null,
+                'install_composer_dependencies' => (bool) (int) $row['data']['install_composer_dependencies'],
+                'install_node_dependencies' => (bool) (int) $row['data']['install_node_dependencies'],
+            ];
+
+            if (! empty($row['data']['ssh_password'])) {
+                $data['ssh_password'] = $row['data']['ssh_password'];
+            }
+            if (! empty($row['data']['db_password'])) {
+                $data['db_password'] = $row['data']['db_password'];
+            }
+
+            if ($row['exists'] && $row['existingId']) {
+                RemoteSite::findOrFail($row['existingId'])->update($data);
+                $updated++;
+            } else {
+                RemoteSite::create($data);
+                $created++;
+            }
+        }
+
+        $this->batchRows = [];
+        $this->batchCsvFile = null;
+        $this->showBatchModal = false;
+
+        $msg = collect([
+            $created ? "{$created} created" : null,
+            $updated ? "{$updated} updated" : null,
+        ])->filter()->join(', ');
+
+        $this->notifySuccess("Import complete: {$msg}.");
     }
 
     public function render()
