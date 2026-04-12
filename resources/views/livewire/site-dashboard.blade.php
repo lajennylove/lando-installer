@@ -113,7 +113,11 @@
                     <option value="">— unlinked —</option>
                     @foreach($this->remoteSites as $remote)
                         <option value="{{ $remote->id }}" @selected($selectedRemoteSiteId == $remote->id)>
-                            {{ $remote->remote_domain }}
+                            @if($remote->local_domain && $remote->local_domain !== $remote->remote_domain)
+                                {{ $remote->local_domain }} — {{ $remote->remote_domain }}
+                            @else
+                                {{ $remote->remote_domain }}
+                            @endif
                         </option>
                     @endforeach
                 </select>
