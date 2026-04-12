@@ -414,6 +414,13 @@ class SiteManager
                 'command' => $this->lando->wpSearchReplaceImported($path, $localUrl, $localTheme),
                 'step' => 6,
             ],
+            [
+                'label' => 'Rebuilding Lando environment',
+                'hint' => 'Runs `lando rebuild -y` to apply all database and config changes.',
+                'timeout' => 600,
+                'command' => $this->lando->rebuild($path),
+                'step' => 7,
+            ],
         ];
 
         return $steps;
