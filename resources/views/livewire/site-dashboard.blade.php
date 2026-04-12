@@ -172,19 +172,6 @@
                     </div>
                 </div>
             </div>
-
-            @if($this->themeScreenshot)
-                <div class="space-y-2">
-                    <flux:heading size="sm">Theme Preview</flux:heading>
-                    <div class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden aspect-[4/3] bg-zinc-100 dark:bg-zinc-900">
-                        <img
-                            src="{{ $this->themeScreenshot }}"
-                            alt="Theme screenshot"
-                            class="absolute inset-0 h-full w-full object-cover object-center"
-                        />
-                    </div>
-                </div>
-            @endif
         </div>
 
         <div class="space-y-4">
@@ -253,10 +240,58 @@
         </div>
     </div>
 
-    {{-- Action Output (show while running so destroy/start/stop stream like create-site steps) --}}
-    @if($actionRunning || $actionOutput)
-        <div class="mt-6">
-            <flux:heading size="sm" class="mb-2">Output</flux:heading>
+    {{-- Theme Preview (1/3) + Unified Terminal (2/3) --}}
+    <div class="mt-8 grid grid-cols-3 gap-6">
+        {{-- Theme Preview --}}
+        <div class="space-y-2">
+            <flux:heading size="sm">Theme Preview</flux:heading>
+            @if($this->themeScreenshot)
+                <div class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden aspect-[4/3] bg-zinc-100 dark:bg-zinc-900">
+                    <img
+                        src="{{ $this->themeScreenshot }}"
+                        alt="Theme screenshot"
+                        class="absolute inset-0 h-full w-full object-cover object-center"
+                    />
+                </div>
+            @else
+                <div class="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 aspect-[4/3] bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center">
+                    <flux:text class="text-sm text-zinc-400">No preview available</flux:text>
+                </div>
+            @endif
+        </div>
+
+        {{-- Unified Terminal --}}
+        <div class="col-span-2 space-y-2">
+            <div class="flex items-center gap-2">
+                <flux:heading size="sm">
+                    @if($actionRunning)
+                        {{ $actionLabel }}…
+                    @elseif($isExecuting)
+                        Sync — Step {{ $currentStep + 1 }} of {{ $totalSteps }}: {{ $steps[$currentStep]['label'] ?? '' }}
+                    @else
+                        Output
+                    @endif
+                </flux:heading>
+                @if($actionRunning || $isExecuting)
+                    <flux:icon name="arrow-path" class="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400" />
+                @endif
+            </div>
+
+            {{-- Sync step badges --}}
+            @if(count($steps) > 0)
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($steps as $step)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                            {{ $step['status'] === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+                               ($step['status'] === 'running'   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 animate-pulse' :
+                               ($step['status'] === 'failed'    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                               'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400')) }}">
+                            {{ $step['label'] }}
+                        </span>
+                    @endforeach
+                </div>
+            @endif
+
             <div
                 id="terminal-output"
                 x-data="{ autoScroll: true }"
@@ -267,56 +302,24 @@
                 @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
                 class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg h-72 overflow-y-auto"
             >
-                @foreach(explode("\n", $actionOutput) as $line)
-                    <span class="terminal-line">{!! $line === '' ? '&nbsp;' : \App\Support\AnsiToHtml::lineToHtml($line) !!}</span>
-                @endforeach
-            </div>
-        </div>
-    @endif
-
-    {{-- Sync terminal (WithCommandExecution step-based output) --}}
-    @if($isExecuting || $terminalOutput)
-        <div class="mt-6">
-            <div class="flex items-center gap-2 mb-2">
-                <flux:heading size="sm">Sync Output</flux:heading>
-                @if($isExecuting)
-                    <div class="flex items-center gap-1.5 text-blue-500 dark:text-blue-400">
-                        <flux:icon name="arrow-path" class="w-3.5 h-3.5 animate-spin" />
-                        <flux:text class="text-xs">Step {{ $currentStep + 1 }} of {{ $totalSteps }}: {{ $steps[$currentStep]['label'] ?? '' }}</flux:text>
-                    </div>
+                @php $output = $terminalOutput ?: $actionOutput; @endphp
+                @if($output)
+                    @foreach(explode("\n", $output) as $line)
+                        <span class="block terminal-line">{!! $line === '' ? '&nbsp;' : \App\Support\AnsiToHtml::lineToHtml($line) !!}</span>
+                    @endforeach
+                @else
+                    <span class="text-zinc-600 dark:text-zinc-500">Waiting for output…</span>
                 @endif
             </div>
-            <div class="mb-3 flex flex-wrap gap-2">
-                @foreach($steps as $i => $step)
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
-                        {{ $step['status'] === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
-                           ($step['status'] === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 animate-pulse' :
-                           ($step['status'] === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                           'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400')) }}">
-                        {{ $step['label'] }}
-                    </span>
-                @endforeach
-            </div>
-            <div
-                id="sync-terminal-output"
-                x-data="{ autoScroll: true }"
-                wire:key="site-sync-terminal"
-                @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
-                @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
-                class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg h-72 overflow-y-auto"
-            >
-                @foreach(explode("\n", $terminalOutput ?: 'Preparing sync…') as $line)
-                    <span class="block terminal-line">{!! $line === '' ? '&nbsp;' : \App\Support\AnsiToHtml::lineToHtml($line) !!}</span>
-                @endforeach
-            </div>
+
             @if($executionFailed)
-                <div class="mt-3 flex items-center gap-3">
+                <div class="flex items-center gap-3 pt-1">
                     <flux:text class="text-sm text-red-600 dark:text-red-400">Sync failed at step {{ $currentStep + 1 }}.</flux:text>
                     <flux:button wire:click="retryFromFailedStep" size="sm" variant="primary" icon="arrow-path">Retry step</flux:button>
                 </div>
             @endif
         </div>
-    @endif
+    </div>
 
     {{-- New Remote Site Modal --}}
     <flux:modal wire:model="showNewRemoteModal" class="max-w-xl">
