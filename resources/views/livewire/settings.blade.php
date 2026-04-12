@@ -436,7 +436,7 @@
                             @if($this->remoteSites->isEmpty())
                                 No remotes yet — downloads a demo template you can fill in and import.
                             @else
-                                Downloads all {{ $this->remoteSites->count() }} remote site(s) as a pipe-separated CSV.
+                                Downloads all {{ $this->remoteSites->count() }} remote site(s) as a comma-separated CSV.
                             @endif
                         </flux:text>
                     </div>
@@ -450,7 +450,7 @@
                     <div>
                         <flux:heading size="sm">Import CSV</flux:heading>
                         <flux:text class="text-sm text-zinc-500 mt-1">
-                            Upload a pipe-separated CSV file. Existing remotes with matching domain will be updated; new ones will be created.
+                            Upload a comma-separated CSV file. Existing remotes with matching domain will be updated; new ones will be created.
                         </flux:text>
                     </div>
                     <flux:field>

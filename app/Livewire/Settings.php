@@ -436,7 +436,7 @@ class Settings extends Component
 
         return response()->streamDownload(function () use ($remotes, $headers, $isDemo) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, $headers, '|');
+            fputcsv($out, $headers);
 
             if ($isDemo) {
                 fputcsv($out, [
@@ -445,7 +445,7 @@ class Settings extends Component
                     '/home/forge/example.com/public', 'wp_production',
                     'wp_user', 'db_password', 'my-theme',
                     'https://github.com/org/theme', '0', '0',
-                ], '|');
+                ]);
             } else {
                 foreach ($remotes as $r) {
                     fputcsv($out, [
@@ -456,7 +456,7 @@ class Settings extends Component
                         $r->repo_url ?? '',
                         $r->install_composer_dependencies ? '1' : '0',
                         $r->install_node_dependencies ? '1' : '0',
-                    ], '|');
+                    ]);
                 }
             }
 
@@ -483,7 +483,7 @@ class Settings extends Component
             'install_composer_dependencies', 'install_node_dependencies',
         ];
 
-        $headers = str_getcsv(array_shift($lines), '|');
+        $headers = str_getcsv(array_shift($lines));
         if ($headers !== $expectedHeaders) {
             $this->batchParseError = true;
             $this->batchParseErrorMessage = 'CSV headers do not match the expected format. Please use the template.';
@@ -494,7 +494,7 @@ class Settings extends Component
         $existing = RemoteSite::all()->keyBy('remote_domain');
 
         foreach ($lines as $line) {
-            $values = str_getcsv($line, '|');
+            $values = str_getcsv($line);
             if (count($values) !== count($expectedHeaders)) {
                 continue;
             }
