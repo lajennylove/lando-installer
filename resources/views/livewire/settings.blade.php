@@ -117,6 +117,45 @@
         </div>
     </div>
 
+    {{-- Network / TLS Certificate --}}
+    <div class="mt-10">
+        <flux:heading size="lg">Network</flux:heading>
+        <flux:subheading class="mt-1">
+            If your network uses a corporate TLS proxy, provide the CA certificate so Lando containers can reach the internet during setup.
+        </flux:subheading>
+
+        <div class="mt-4 rounded-lg border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-200 dark:divide-zinc-700">
+            <div class="px-4 py-3 space-y-2">
+                <div class="flex justify-between items-center">
+                    <flux:text class="text-sm text-zinc-500">CA Certificate Path</flux:text>
+                    @if($caCertPath && file_exists($caCertPath))
+                        <span class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-3.5"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" /></svg>
+                            Certificate found
+                        </span>
+                    @elseif($caCertPath)
+                        <span class="text-xs text-red-500 dark:text-red-400">File not found</span>
+                    @endif
+                </div>
+                <div class="flex items-center gap-2">
+                    <input
+                        wire:model.blur="caCertPath"
+                        wire:change="saveCaCertPath"
+                        type="text"
+                        placeholder="/path/to/corporate-ca.crt"
+                        class="flex-1 text-sm bg-transparent border border-zinc-200 dark:border-zinc-600 rounded-md px-3 py-1.5 focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-500 font-mono dark:text-white placeholder-zinc-400"
+                    />
+                </div>
+                @error('caCertPath')
+                    <p class="text-xs text-red-500">{{ $message }}</p>
+                @enderror
+                <flux:text class="text-xs text-zinc-400 dark:text-zinc-500">
+                    Path to a PEM-encoded CA certificate file (.crt or .pem). The certificate will be injected into new Lando containers.
+                </flux:text>
+            </div>
+        </div>
+    </div>
+
     {{-- System Dependencies --}}
     <div class="mt-10">
         <div class="flex items-center justify-between">

@@ -76,6 +76,10 @@
         "native:electron": [
             "Composer\\Config::disableProcessTimeout",
             "bash scripts/native-electron.sh"
+        ],
+        "native:dev:win": [
+            "Composer\\Config::disableProcessTimeout",
+            "powershell -ExecutionPolicy Bypass -NoProfile -File scripts/native-dev.ps1"
         ]
     },
     "extra": {

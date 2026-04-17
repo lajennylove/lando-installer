@@ -8,11 +8,12 @@ config:
 
 services:
   appserver:
-    build_as_root:
-      - apt-get update -y && apt-get install -y vim openssh-client curl sshpass
+{{CA_CERT_OVERRIDES}}    build_as_root:
+{{CA_CERT_BUILD_STEPS}}      - apt-get update -y && apt-get install -y vim openssh-client curl sshpass
       - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
       - apt-get install -y nodejs
       - npm install -g yarn
+      - curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp && chmod +x /usr/local/bin/wp
 
   database:
     portforward: {{DB_PORT}}

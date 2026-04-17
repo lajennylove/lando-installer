@@ -35,6 +35,8 @@ class Settings extends Component
 
     public string $defaultCodePath = '';
 
+    public string $caCertPath = '';
+
     // Remote site form
     public bool $showRemoteSiteForm = false;
 
@@ -87,6 +89,7 @@ class Settings extends Component
         $this->defaultDbVersion = $defaults['db_version'] ?? config('lando_dev.defaults.db_version');
         $this->defaultRedisVersion = $defaults['redis_version'] ?? config('lando_dev.defaults.redis_version');
         $this->defaultCodePath = $defaults['code_path'] ?? config('lando_dev.defaults.code_path') ?? '~/code/sites/';
+        $this->caCertPath = $defaults['ca_cert_path'] ?? '';
     }
 
     public function setAppearance(string $value): void
@@ -134,6 +137,26 @@ class Settings extends Component
         $this->notifySuccess('Default code path updated.');
     }
 
+    public function saveCaCertPath(): void
+    {
+        $path = trim($this->caCertPath);
+
+        if ($path !== '' && ! file_exists($path)) {
+            $this->addError('caCertPath', 'Certificate file not found at that path.');
+
+            return;
+        }
+
+        $this->caCertPath = $path;
+        $this->persistDefaults();
+
+        if ($path === '') {
+            $this->notifySuccess('CA certificate cleared.');
+        } else {
+            $this->notifySuccess('CA certificate path saved.');
+        }
+    }
+
     private function persistDefaults(): void
     {
         $path = storage_path('landodev_defaults.json');
@@ -142,6 +165,7 @@ class Settings extends Component
             'db_version' => $this->defaultDbVersion,
             'redis_version' => $this->defaultRedisVersion,
             'code_path' => $this->defaultCodePath,
+            'ca_cert_path' => $this->caCertPath,
         ], JSON_PRETTY_PRINT));
     }
 

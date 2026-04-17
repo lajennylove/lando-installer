@@ -66,6 +66,8 @@ class SiteManager
         // Create .nvmrc for Node version consistency
         file_put_contents($sitePath.DIRECTORY_SEPARATOR.'.nvmrc', "22\n");
 
+        $this->copyCaCertIfConfigured($sitePath);
+
         return Site::create([
             'name' => $slug,
             'path' => $sitePath,
@@ -162,6 +164,8 @@ class SiteManager
         $versions = $this->resolvedLandoVersions();
         $dbPort = $this->allocateDatabaseForwardPort();
         $this->yamlGenerator->write($slug, $sitePath, array_merge($versions, ['db_port' => $dbPort]));
+
+        $this->copyCaCertIfConfigured($sitePath);
 
         return Site::create([
             'name' => $slug,
@@ -360,5 +364,21 @@ class SiteManager
         }
 
         return "rm -rf '{$site->path}'";
+    }
+
+    /**
+     * Copy the user-configured CA certificate into the site directory so Lando
+     * can mount it into the container and install it in the system CA store.
+     */
+    private function copyCaCertIfConfigured(string $sitePath): void
+    {
+        $certPath = Settings::getDefault('ca_cert_path');
+
+        if (! $certPath || ! is_file($certPath)) {
+            return;
+        }
+
+        $dest = $sitePath.DIRECTORY_SEPARATOR.'lando-ca.crt';
+        copy($certPath, $dest);
     }
 }
