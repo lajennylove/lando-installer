@@ -1,4 +1,4 @@
-<div>
+<div @if($landoUpdating) wire:poll.3s="pollLandoUpdate" @endif>
     <flux:heading size="xl">Settings</flux:heading>
     <flux:subheading class="mt-1">Configure Lando Studio defaults and remote sites</flux:subheading>
 
@@ -163,10 +163,52 @@
                 <flux:heading size="lg">System Dependencies</flux:heading>
                 <flux:subheading class="mt-1">Lando and Docker are required to run local sites.</flux:subheading>
             </div>
-            <flux:button href="{{ route('setup') }}" variant="primary" icon="wrench-screwdriver">
-                Manage Dependencies
-            </flux:button>
+            <div class="flex items-center gap-2">
+                <flux:button
+                    wire:click="runLandoUpdate"
+                    wire:loading.attr="disabled"
+                    wire:target="runLandoUpdate"
+                    variant="filled"
+                    icon="arrow-up-circle"
+                    :disabled="$landoUpdating"
+                >
+                    @if($landoUpdating)
+                        <flux:icon name="arrow-path" class="w-4 h-4 animate-spin" />
+                        Updating…
+                    @else
+                        Update Lando
+                    @endif
+                </flux:button>
+                <flux:button href="{{ route('setup') }}" variant="primary" icon="wrench-screwdriver">
+                    Manage Dependencies
+                </flux:button>
+            </div>
         </div>
+
+        @if($landoUpdating || $landoUpdateOutput !== '')
+            <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <flux:text class="text-xs text-zinc-500">Update log</flux:text>
+                    @if($landoUpdating)
+                        <div class="flex items-center gap-1.5 text-blue-500 dark:text-blue-400">
+                            <flux:icon name="arrow-path" class="w-3.5 h-3.5 animate-spin" />
+                            <flux:text class="text-xs">Running lando update -y…</flux:text>
+                        </div>
+                    @endif
+                </div>
+                <div
+                    id="lando-update-output"
+                    x-data="{ autoScroll: true }"
+                    @landodev-scroll-terminal.window="if (autoScroll) { requestAnimationFrame(() => { $el.scrollTop = $el.scrollHeight }) }"
+                    @scroll="autoScroll = ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50)"
+                    class="bg-zinc-900 text-green-400 font-mono text-xs p-4 rounded-lg overflow-y-auto max-h-64"
+                >
+                    @foreach(explode("\n", $landoUpdateOutput ?: 'Starting…') as $line)
+                        <span class="block">{!! $line === '' ? '&nbsp;' : \App\Support\AnsiToHtml::lineToHtml($line) !!}</span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 
     {{-- Application data (SQLite) — sidebar reads sites table; deleting folders/Docker does not remove rows --}}
@@ -204,13 +246,31 @@
         </div>
     </div>
 
+    {{-- Import Local Sites --}}
+    <div class="mt-10">
+        <div class="flex items-center justify-between">
+            <div>
+                <flux:heading size="lg">Local Installations</flux:heading>
+                <flux:subheading class="mt-1">Import Lando projects that exist on disk but are not yet tracked in Lando Studio.</flux:subheading>
+            </div>
+            <flux:button href="{{ route('settings.import', [], false) }}" wire:navigate variant="primary" icon="arrow-down-tray">
+                Import local installations
+            </flux:button>
+        </div>
+    </div>
+
     {{-- Remote Sites Section --}}
     <div class="mt-10">
         <div class="flex items-center justify-between">
             <flux:heading size="lg">Remote Sites</flux:heading>
-            <flux:button wire:click="addRemoteSite" size="sm" icon="plus" variant="primary">
-                Add Remote Site
-            </flux:button>
+            <div class="flex items-center gap-2">
+                <flux:button wire:click="openBatchModal" size="sm" icon="arrow-path" variant="ghost">
+                    Batch import/export
+                </flux:button>
+                <flux:button wire:click="addRemoteSite" size="sm" icon="plus" variant="primary">
+                    Add Remote Site
+                </flux:button>
+            </div>
         </div>
 
         @if($showRemoteSiteForm)
@@ -397,6 +457,155 @@
                 <flux:button wire:click="$set('showResetAppDataModal', false)" variant="ghost">Cancel</flux:button>
                 <flux:button wire:click="resetApplicationData" variant="danger" icon="trash">Reset data</flux:button>
             </div>
+        </div>
+    </flux:modal>
+
+    {{-- Batch Import / Export Modal --}}
+    <flux:modal wire:model="showBatchModal" class="w-full max-w-[calc(100vw-2rem)]">
+        <div class="space-y-4">
+            <flux:heading size="lg">Batch Import / Export</flux:heading>
+
+            {{-- Top action cards --}}
+            <div class="grid grid-cols-2 gap-4">
+                {{-- Export card --}}
+                <div class="p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 flex flex-col gap-3">
+                    <div>
+                        <flux:heading size="sm">Export CSV</flux:heading>
+                        <flux:text class="text-sm text-zinc-500 mt-1">
+                            @if($this->remoteSites->isEmpty())
+                                No remotes yet — downloads a demo template you can fill in and import.
+                            @else
+                                Downloads all {{ $this->remoteSites->count() }} remote site(s) as a comma-separated CSV.
+                            @endif
+                        </flux:text>
+                    </div>
+                    <flux:button wire:click="exportRemoteSites" icon="arrow-down-tray" variant="ghost">
+                        {{ $this->remoteSites->isEmpty() ? 'Download template' : 'Export CSV' }}
+                    </flux:button>
+                </div>
+
+                {{-- Import card --}}
+                <div class="p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 flex flex-col gap-3">
+                    <div>
+                        <flux:heading size="sm">Import CSV</flux:heading>
+                        <flux:text class="text-sm text-zinc-500 mt-1">
+                            Upload a comma-separated CSV file. Existing remotes with matching domain will be updated; new ones will be created.
+                        </flux:text>
+                    </div>
+                    <flux:field>
+                        <input
+                            type="file"
+                            accept=".csv,.txt"
+                            wire:model="batchCsvFile"
+                            class="block w-full text-sm text-zinc-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-zinc-100 file:text-zinc-700 dark:file:bg-zinc-700 dark:file:text-zinc-200 hover:file:bg-zinc-200 dark:hover:file:bg-zinc-600 cursor-pointer"
+                        />
+                    </flux:field>
+                </div>
+            </div>
+
+            {{-- Parse error --}}
+            @if($batchParseError)
+                <div class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-sm text-red-700 dark:text-red-300">
+                    {{ $batchParseErrorMessage }}
+                </div>
+            @endif
+
+            {{-- Preview table --}}
+            @if(count($batchRows) > 0)
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <flux:heading size="sm">Preview ({{ count($batchRows) }} rows)</flux:heading>
+                        <flux:button wire:click="executeBatchImport" variant="primary" icon="check" size="sm">
+                            Import Selected
+                        </flux:button>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+                        <table class="w-full text-sm">
+                            <thead class="bg-zinc-50 dark:bg-zinc-800 text-left">
+                                <tr>
+                                    <th class="px-3 py-2.5 w-8">
+                                        <input
+                                            type="checkbox"
+                                            wire:model.live="batchSelectAll"
+                                            wire:change="toggleBatchSelectAll"
+                                            class="rounded border-zinc-300 dark:border-zinc-600"
+                                        />
+                                    </th>
+                                    <th class="px-3 py-2.5 font-medium text-zinc-700 dark:text-zinc-300">Domain</th>
+                                    <th class="px-3 py-2.5 font-medium text-zinc-700 dark:text-zinc-300">SSH IP</th>
+                                    <th class="px-3 py-2.5 font-medium text-zinc-700 dark:text-zinc-300">SSH User</th>
+                                    <th class="px-3 py-2.5 font-medium text-zinc-700 dark:text-zinc-300">DB Name</th>
+                                    <th class="px-3 py-2.5 font-medium text-zinc-700 dark:text-zinc-300">DB User</th>
+                                    <th class="px-3 py-2.5 font-medium text-zinc-700 dark:text-zinc-300">Theme</th>
+                                    <th class="px-3 py-2.5 font-medium text-zinc-700 dark:text-zinc-300">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-700/50">
+                                @foreach($batchRows as $i => $row)
+                                    <tr class="{{ $row['exists'] ? 'bg-amber-50 dark:bg-amber-900/10' : '' }}">
+                                        <td class="px-3 py-2">
+                                            <input
+                                                type="checkbox"
+                                                wire:model.live="batchRows.{{ $i }}.selected"
+                                                class="rounded border-zinc-300 dark:border-zinc-600"
+                                            />
+                                        </td>
+                                        <td class="px-3 py-2 font-medium">
+                                            {{ $row['data']['remote_domain'] }}
+                                        </td>
+                                        <td class="px-3 py-2 text-zinc-600 dark:text-zinc-400 font-mono text-xs">
+                                            {{ $row['data']['ssh_server_ip'] }}
+                                        </td>
+                                        <td class="px-3 py-2 text-zinc-600 dark:text-zinc-400">
+                                            {{ $row['data']['ssh_user'] }}
+                                        </td>
+                                        <td class="px-3 py-2 text-zinc-600 dark:text-zinc-400">
+                                            {{ $row['data']['db_name'] }}
+                                        </td>
+                                        <td class="px-3 py-2 text-zinc-600 dark:text-zinc-400">
+                                            {{ $row['data']['db_user'] }}
+                                        </td>
+                                        <td class="px-3 py-2 text-zinc-600 dark:text-zinc-400">
+                                            {{ $row['data']['theme_name'] ?: '—' }}
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            @if($row['exists'])
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                                    ⚠ Update
+                                                </span>
+                                                @if(count($row['changedFields']) > 0)
+                                                    <div class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                                        Changes:
+                                                        @foreach($row['changedFields'] as $field)
+                                                            <span class="inline-block bg-amber-100 dark:bg-amber-900/30 rounded px-1 mr-0.5">
+                                                                {{ in_array($field, ['ssh_password', 'db_password']) ? str_replace('_', ' ', $field).' [will be updated]' : str_replace('_', ' ', $field) }}
+                                                            </span>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+                                            @else
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                                    ✓ New
+                                                </span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex justify-between items-center mt-3">
+                        <flux:text class="text-xs text-zinc-500">
+                            {{ collect($batchRows)->where('selected', true)->count() }} of {{ count($batchRows) }} selected
+                        </flux:text>
+                        <flux:button wire:click="executeBatchImport" variant="primary" icon="check">
+                            Import Selected
+                        </flux:button>
+                    </div>
+                </div>
+            @endif
         </div>
     </flux:modal>
 </div>

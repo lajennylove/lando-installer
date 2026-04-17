@@ -3,13 +3,17 @@
 namespace App\Livewire;
 
 use App\Enums\SiteStatus;
+use App\Livewire\Concerns\WithCommandExecution;
 use App\Livewire\Concerns\WithNotifications;
+use App\Models\RemoteSite;
 use App\Models\Site;
 use App\Services\LandoService;
 use App\Services\LandoYamlGenerator;
 use App\Services\PlatformDetector;
+use App\Services\RemoteConnectionVerifier;
 use App\Services\SiteManager;
 use App\Support\LogContentUtf8;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -19,6 +23,7 @@ use Native\Laravel\Facades\ChildProcess;
 #[Title('Lando Studio')]
 class SiteDashboard extends Component
 {
+    use WithCommandExecution;
     use WithNotifications;
 
     public Site $site;
@@ -50,6 +55,48 @@ class SiteDashboard extends Component
 
     public array $availableThemes = [];
 
+    // Remote site linking
+    public ?int $selectedRemoteSiteId = null;
+
+    // New Remote Site form
+    public bool $showNewRemoteModal = false;
+
+    public string $newRemoteDomain = '';
+
+    public string $newRemoteLocalSiteName = '';
+
+    public string $newRemoteSshIp = '';
+
+    public string $newRemoteSshUser = '';
+
+    public string $newRemoteSshPassword = '';
+
+    public string $newRemotePath = '';
+
+    public string $newRemoteDbName = '';
+
+    public string $newRemoteDbUser = '';
+
+    public string $newRemoteDbPassword = '';
+
+    public string $newRemoteThemeName = '';
+
+    public string $newRemoteRepoUrl = '';
+
+    public bool $newRemoteInstallComposer = false;
+
+    public bool $newRemoteInstallNode = false;
+
+    // Sync Remote
+    public bool $showSyncModal = false;
+
+    public string $syncLocalTheme = '';
+
+    public bool $syncConnectionCheckInProgress = false;
+
+    /** Steps cached for WithCommandExecution retry. */
+    private ?array $cachedSyncSteps = null;
+
     public function mount(Site $site): void
     {
         $this->phpVersions = config('lando_dev.defaults.php_versions');
@@ -58,6 +105,8 @@ class SiteDashboard extends Component
 
         $this->site = $site;
         $this->activeTheme = $site->theme_name ?? '';
+        $this->selectedRemoteSiteId = $site->remote_site_id;
+        $this->syncLocalTheme = $site->theme_name ?? '';
         $this->checkRealStatus();
         if (! $this->isProjectMissingOnDisk()) {
             $this->loadAvailableThemes();
@@ -136,7 +185,7 @@ class SiteDashboard extends Component
             return;
         }
 
-        $running = $lando->isRunning($this->site->path);
+        $running = $lando->isRunning($this->site->path, $this->site->name);
         $newStatus = $running ? SiteStatus::Running : SiteStatus::Stopped;
 
         if ($this->site->status !== $newStatus && $this->site->status !== SiteStatus::Creating) {
@@ -153,6 +202,7 @@ class SiteDashboard extends Component
 
             return;
         }
+        app(SiteManager::class)->ensurePortAvailable($this->site);
         $this->runAction('Starting', app(LandoService::class)->start($this->site->path));
     }
 
@@ -402,6 +452,13 @@ class SiteDashboard extends Component
 
     public function pollActionStatus(): void
     {
+        // Delegate to WithCommandExecution for sync operations
+        if ($this->isExecuting) {
+            $this->checkCommandStatus();
+
+            return;
+        }
+
         if (! $this->actionRunning) {
             return;
         }
@@ -556,6 +613,195 @@ class SiteDashboard extends Component
             cmd: [$platform->shellWrapper(), $platform->shellFlag(), $wrapped],
             alias: 'action-site-'.$this->site->id.'-'.uniqid(),
         );
+    }
+
+    // ── Remote Site Linking ─────────────────────────────────────────────────
+
+    public function getRemoteSitesProperty()
+    {
+        return RemoteSite::orderBy('remote_domain')->get();
+    }
+
+    public function linkRemoteSite(): void
+    {
+        if ($this->selectedRemoteSiteId === null) {
+            $this->unlinkRemoteSite();
+
+            return;
+        }
+
+        if (! RemoteSite::find($this->selectedRemoteSiteId)) {
+            $this->notifyError('Selected remote site not found.');
+
+            return;
+        }
+
+        $this->site->update(['remote_site_id' => $this->selectedRemoteSiteId]);
+        $this->site->refresh();
+        $this->notifySuccess('Remote site linked.');
+    }
+
+    public function unlinkRemoteSite(): void
+    {
+        $this->selectedRemoteSiteId = null;
+        $this->site->update(['remote_site_id' => null]);
+        $this->site->refresh();
+        $this->notifySuccess('Remote site unlinked.');
+    }
+
+    public function openNewRemoteModal(): void
+    {
+        $this->newRemoteDomain = '';
+        $this->newRemoteLocalSiteName = '';
+        $this->newRemoteSshIp = '';
+        $this->newRemoteSshUser = '';
+        $this->newRemoteSshPassword = '';
+        $this->newRemotePath = '';
+        $this->newRemoteDbName = '';
+        $this->newRemoteDbUser = '';
+        $this->newRemoteDbPassword = '';
+        $this->newRemoteThemeName = $this->site->theme_name ?? '';
+        $this->newRemoteRepoUrl = '';
+        $this->newRemoteInstallComposer = false;
+        $this->newRemoteInstallNode = false;
+        $this->showNewRemoteModal = true;
+    }
+
+    public function saveNewRemoteSite(): void
+    {
+        $this->validate([
+            'newRemoteDomain' => 'required|url',
+            'newRemoteLocalSiteName' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9\s\-]+$/'],
+            'newRemoteSshIp' => 'required|string',
+            'newRemoteSshUser' => 'required|string',
+            'newRemotePath' => 'required|string|max:512',
+            'newRemoteDbName' => 'required|string',
+            'newRemoteDbUser' => 'required|string',
+        ], [], [
+            'newRemoteDomain' => 'remote domain',
+            'newRemoteLocalSiteName' => 'local site name',
+            'newRemoteSshIp' => 'SSH server IP',
+            'newRemoteSshUser' => 'SSH user',
+            'newRemotePath' => 'WordPress root path',
+            'newRemoteDbName' => 'DB name',
+            'newRemoteDbUser' => 'DB user',
+        ]);
+
+        $repoUrl = $this->newRemoteRepoUrl ?: null;
+        $localSlug = Str::slug(trim($this->newRemoteLocalSiteName));
+        $localDomain = $localSlug !== '' ? "https://{$localSlug}.lndo.site" : null;
+
+        $remote = RemoteSite::create([
+            'remote_domain' => $this->newRemoteDomain,
+            'local_domain' => $localDomain,
+            'ssh_server_ip' => $this->newRemoteSshIp,
+            'ssh_user' => $this->newRemoteSshUser,
+            'ssh_password' => $this->newRemoteSshPassword ?: null,
+            'remote_path' => rtrim($this->newRemotePath),
+            'db_name' => $this->newRemoteDbName,
+            'db_user' => $this->newRemoteDbUser,
+            'db_password' => $this->newRemoteDbPassword ?: null,
+            'theme_name' => $this->newRemoteThemeName ?: null,
+            'repo_url' => $repoUrl,
+            'install_composer_dependencies' => $repoUrl && $this->newRemoteInstallComposer,
+            'install_node_dependencies' => $repoUrl && $this->newRemoteInstallNode,
+        ]);
+
+        $this->site->update(['remote_site_id' => $remote->id]);
+        $this->site->refresh();
+        $this->selectedRemoteSiteId = $remote->id;
+        $this->showNewRemoteModal = false;
+        $this->notifySuccess("Remote site '{$remote->remote_domain}' created and linked.");
+    }
+
+    // ── Sync Remote ─────────────────────────────────────────────────────────
+
+    public function confirmSync(): void
+    {
+        if (! $this->site->remote_site_id) {
+            $this->notifyError('Link a remote site first before syncing.');
+
+            return;
+        }
+
+        if ($this->isProjectMissingOnDisk()) {
+            $this->notifyError('Project folder is missing on disk.');
+
+            return;
+        }
+
+        $this->syncLocalTheme = $this->site->theme_name ?? '';
+        $this->showSyncModal = true;
+    }
+
+    public function startSync(): void
+    {
+        $this->showSyncModal = false;
+
+        $remoteSite = RemoteSite::find($this->site->remote_site_id);
+        if (! $remoteSite) {
+            $this->notifyError('Linked remote site no longer exists. Please re-link.');
+
+            return;
+        }
+
+        $this->syncConnectionCheckInProgress = true;
+
+        try {
+            $verify = app(RemoteConnectionVerifier::class)->verify($remoteSite);
+        } catch (\Throwable $e) {
+            $this->syncConnectionCheckInProgress = false;
+            $this->notifyError('Connection check failed: '.$e->getMessage());
+
+            return;
+        }
+
+        $this->syncConnectionCheckInProgress = false;
+
+        if (! $verify->ok) {
+            $this->notifyError("Connection check failed ({$verify->phase}): {$verify->message}. Update credentials in Settings.");
+
+            return;
+        }
+
+        $this->cachedSyncSteps = null;
+        $manager = app(SiteManager::class);
+        $steps = $manager->getSyncSteps($this->site, $remoteSite, $this->syncLocalTheme ?: null);
+
+        $this->executeStepSequence($steps, $this->site);
+    }
+
+    // WithCommandExecution contract ──────────────────────────────────────────
+
+    protected function getSite(): ?Site
+    {
+        return $this->site;
+    }
+
+    protected function getStepDefinitions(): array
+    {
+        if ($this->cachedSyncSteps !== null) {
+            return $this->cachedSyncSteps;
+        }
+
+        $remoteSite = RemoteSite::find($this->site->remote_site_id);
+        if (! $remoteSite) {
+            return [];
+        }
+
+        $this->cachedSyncSteps = app(SiteManager::class)->getSyncSteps(
+            $this->site,
+            $remoteSite,
+            $this->syncLocalTheme ?: null
+        );
+
+        return $this->cachedSyncSteps;
+    }
+
+    protected function onSequenceComplete(Site $site): void
+    {
+        $this->notifySuccess("Database synced from production for '{$site->name}'.");
+        $this->checkRealStatus();
     }
 
     public function getThemeScreenshotProperty(): ?string

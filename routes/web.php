@@ -5,6 +5,7 @@ use App\Livewire\CloneSite;
 use App\Livewire\CreateSite;
 use App\Livewire\DependencyCheck;
 use App\Livewire\NewSite;
+use App\Livewire\ImportSites;
 use App\Livewire\Settings;
 use App\Livewire\SiteDashboard;
 use App\Models\Site;
@@ -39,4 +40,5 @@ Route::get('/sites/{site}', SiteDashboard::class)->name('sites.show');
 
 // Settings & About
 Route::get('/settings', Settings::class)->name('settings');
+Route::get('/settings/import', ImportSites::class)->name('settings.import');
 Route::get('/about', About::class)->name('about');

@@ -30,6 +30,93 @@ class SiteManager
     }
 
     /**
+     * Before starting a site, ensure its .lando.yml database portforward is not already bound by
+     * another process. If it is, reassigns the next free port both in the YAML file and in the DB.
+     */
+    public function ensurePortAvailable(Site $site): void
+    {
+        $yamlPath = rtrim($site->path, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'.lando.yml';
+
+        if (! file_exists($yamlPath)) {
+            return;
+        }
+
+        // Use the YAML parser to get the current explicit port (null = dynamic, skip)
+        $parser = app(LandoYamlParser::class);
+        $parsed = $parser->parse($yamlPath);
+        $currentPort = $parsed['db_port'] ?? null;
+
+        if ($currentPort === null) {
+            return;
+        }
+
+        if (! $this->isPortBound($currentPort)) {
+            return;
+        }
+
+        // Find the next free port
+        $newPort = $currentPort + 1;
+        while ($this->isPortBound($newPort)) {
+            $newPort++;
+        }
+
+        // Rewrite only the portforward line inside the database: block
+        $content = file_get_contents($yamlPath);
+        $content = $this->replaceDbPortInYaml($content, $currentPort, $newPort);
+        file_put_contents($yamlPath, $content);
+
+        // Persist the new port in the database record
+        $site->db_port = $newPort;
+        $site->save();
+    }
+
+    /**
+     * Check whether a TCP port is currently bound on localhost.
+     */
+    private function isPortBound(int $port): bool
+    {
+        $sock = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.3);
+        if ($sock !== false) {
+            fclose($sock);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Replace the portforward integer value in the database: service block only,
+     * leaving the cache: service's "portforward: true" untouched.
+     */
+    private function replaceDbPortInYaml(string $content, int $oldPort, int $newPort): string
+    {
+        // Find the database: service block (2-space indented service key)
+        $dbStart = strpos($content, "\n  database:\n");
+        if ($dbStart === false) {
+            return $content;
+        }
+
+        // Find where the next sibling service starts (same 2-space indent level)
+        $afterDb = $dbStart + strlen("\n  database:\n");
+        if (preg_match('/\n  [a-zA-Z]/', $content, $m, PREG_OFFSET_CAPTURE, $afterDb)) {
+            $nextService = $m[0][1];
+        } else {
+            $nextService = strlen($content);
+        }
+
+        // Replace portforward: <integer> only within the database block
+        $dbBlock = substr($content, $dbStart, $nextService - $dbStart);
+        $dbBlock = preg_replace(
+            '/(\n\s+portforward:\s*)'.preg_quote((string) $oldPort, '/').'(?=\s|$)/',
+            '${1}'.$newPort,
+            $dbBlock
+        );
+
+        return substr($content, 0, $dbStart).$dbBlock.substr($content, $nextService);
+    }
+
+    /**
      * Next unique host port for database portforward in .lando.yml (avoids Docker bind conflicts).
      */
     public function allocateDatabaseForwardPort(): int
@@ -380,5 +467,69 @@ class SiteManager
 
         $dest = $sitePath.DIRECTORY_SEPARATOR.'lando-ca.crt';
         copy($certPath, $dest);
+    }
+
+    /**
+     * Steps to sync a fresh database dump from production into an existing local site.
+     *
+     * Reuses the dump → validate → import → wp-config → cleanup → search-replace chain
+     * from getCloneSiteSteps, but skips folder creation, lando start, wp-core-download,
+     * git clone, composer/node/build steps — those already exist locally.
+     *
+     * @param  string|null  $localThemeName  Override for the local theme folder name.
+     *                                       Falls back to $site->theme_name.
+     */
+    public function getSyncSteps(Site $site, RemoteSite $remoteSite, ?string $localThemeName = null): array
+    {
+        $path = $site->path;
+        $localTheme = $localThemeName ?: $site->theme_name ?: null;
+        $dumpFile = "{$path}/dumpfile.sql.gz";
+        $localUrl = "https://{$site->name}.lndo.site";
+
+        $steps = [
+            [
+                'label' => 'Dumping remote database',
+                'hint' => 'Streams SQL over SSH then compresses locally — nothing is written on the remote server. Expect 2–10 minutes depending on database size.',
+                'timeout' => 1200,
+                'command' => $this->ssh->buildMysqldumpCommand($remoteSite, $dumpFile),
+                'step' => 1,
+            ],
+            [
+                'label' => 'Validating dump file',
+                'command' => $this->validateDumpFileCommand($dumpFile),
+                'step' => 2,
+            ],
+            [
+                'label' => 'Importing database',
+                'command' => $this->lando->dbImport($path, 'dumpfile.sql.gz'),
+                'step' => 3,
+            ],
+            [
+                'label' => 'Creating WordPress config',
+                'command' => $this->cloneWpConfigCommand($path, $site),
+                'step' => 4,
+            ],
+            [
+                'label' => 'Cleaning up dump file',
+                'command' => $this->removeDumpFileCommand($dumpFile),
+                'step' => 5,
+            ],
+            [
+                'label' => 'Replacing domain references',
+                'hint' => 'Search-replace prod URL → local URL.',
+                'timeout' => 1200,
+                'command' => $this->lando->wpSearchReplaceImported($path, $localUrl, $localTheme),
+                'step' => 6,
+            ],
+            [
+                'label' => 'Rebuilding Lando environment',
+                'hint' => 'Runs `lando rebuild -y` to apply all database and config changes.',
+                'timeout' => 600,
+                'command' => $this->lando->rebuild($path),
+                'step' => 7,
+            ],
+        ];
+
+        return $steps;
     }
 }
