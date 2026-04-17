@@ -51,9 +51,8 @@
         @livewire('site-list')
     </div>
 
-    <flux:spacer />
 
-    <flux:navlist variant="outline">
+    <flux:navlist variant="outline" class="mt-auto">
         @foreach($secondMenu as $item)
             @if($item['title'] === 'separator')
                 <flux:separator variant="subtle" />

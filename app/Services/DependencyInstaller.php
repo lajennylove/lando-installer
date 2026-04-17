@@ -14,6 +14,7 @@ class DependencyInstaller
             'lando' => $this->installLando(),
             'docker' => $this->installDocker(),
             'orbstack' => $this->installOrbStack(),
+            'putty' => $this->installPutty(),
             default => throw new \InvalidArgumentException("Unknown dependency: {$dependency}"),
         };
     }
@@ -58,6 +59,18 @@ class DependencyInstaller
     {
         // OrbStack is macOS-only; bootstrap Homebrew if needed.
         return $this->withBrewBootstrap('brew install --cask orbstack');
+    }
+
+    public function installPutty(): string
+    {
+        // winget is built into Windows 10 (21H1+) and Windows 11.
+        // --silent           suppress installer UI
+        // --accept-*         pre-accept agreements required for unattended runs
+        // PuTTY.PuTTY is the official winget package id (installs plink.exe + putty.exe).
+        return implode('; ', [
+            'winget install --id PuTTY.PuTTY --source winget --silent --accept-package-agreements --accept-source-agreements',
+            'Write-Output "[Lando Studio] PuTTY installed. plink.exe is in: $env:ProgramFiles\PuTTY\"',
+        ]);
     }
 
     /**

@@ -63,6 +63,16 @@ class DependencyCheck extends Component
                 'required' => false,
             ];
         }
+
+        if ($platform->isWindows()) {
+            $this->dependencies['putty'] = [
+                'installed' => $checker->isPuttyInstalled(),
+                'version' => $checker->getPuttyVersion(),
+                'label' => 'PuTTY',
+                'description' => 'Required for SSH password auth when cloning remote sites',
+                'required' => false,
+            ];
+        }
     }
 
     public function install(string $dependency): void
@@ -119,6 +129,19 @@ class DependencyCheck extends Component
 
         $this->checkDependencies();
 
+        // lando setup has no matching dependency key — detect completion via log marker
+        if ($this->installingDep === 'lando-setup') {
+            if (str_contains($this->installOutput, '[Lando Studio] lando setup finished')) {
+                $this->installing = false;
+                $this->installingDep = '';
+                $this->installLogFile = '';
+                $this->dispatch('landodev-scroll-terminal');
+                $this->notifySuccess('Lando plugins installed successfully!');
+            }
+
+            return;
+        }
+
         $dep = $this->dependencies[$this->installingDep] ?? null;
         if ($dep && $dep['installed']) {
             $this->installing = false;
@@ -126,6 +149,49 @@ class DependencyCheck extends Component
             $this->installLogFile = '';
             $this->dispatch('landodev-scroll-terminal');
             $this->notifySuccess("{$dep['label']} installed successfully!");
+        }
+    }
+
+    public function runLandoSetup(): void
+    {
+        $checker = app(DependencyChecker::class);
+
+        if (! $checker->isLandoInstalled()) {
+            $this->notifyError('Lando must be installed before running setup.');
+
+            return;
+        }
+
+        $platform = app(PlatformDetector::class);
+
+        $this->installing = true;
+        $this->installingDep = 'lando-setup';
+        $this->installOutput = '';
+        $this->installLogFile = storage_path('logs/install_lando-setup.log');
+
+        @unlink($this->installLogFile);
+
+        $lando = $checker->getLandoPath() ?? 'lando';
+        $marker = '[Lando Studio] lando setup finished';
+
+        if ($platform->isWindows()) {
+            $log = addslashes($this->installLogFile);
+            $cmd = [...$platform->powershellArgs(), $platform->powershellUtf8Prefix()."& \"{$lando}\" setup --yes *> '{$log}'; Add-Content -Path '{$log}' -Value \"{$marker}\""];
+        } else {
+            $logArg = escapeshellarg($this->installLogFile);
+            $markerArg = escapeshellarg($marker);
+            $command = escapeshellarg($lando)." setup --yes > {$logArg} 2>&1; echo {$markerArg} >> {$logArg}";
+            $cmd = [$platform->shellWrapper(), $platform->shellFlag(), $command];
+        }
+
+        file_put_contents($this->installLogFile, "[Lando Studio] Running: {$lando} setup --yes\n");
+
+        try {
+            ChildProcess::start(cmd: $cmd, alias: 'lando-setup');
+        } catch (\Throwable $e) {
+            $this->installing = false;
+            $this->installOutput = '[Lando Studio ERROR] Failed to start lando setup: '.$e->getMessage();
+            file_put_contents($this->installLogFile, "\n[Lando Studio ERROR] ".$e->getMessage()."\n", FILE_APPEND);
         }
     }
 

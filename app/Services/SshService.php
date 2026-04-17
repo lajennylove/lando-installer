@@ -69,9 +69,15 @@ class SshService
         $localSql = escapeshellarg($localSqlPath);
 
         if ($this->platform->isWindows()) {
-            // cmd.exe: no pipefail; keep single pipe (Git Bash users may still get truncation).
-            return $sshpassSsh.' '.$target.' '.$remoteArg
-                .' | gzip > '.$localGz;
+            // On Windows, sshpass and gzip are unavailable. Delegate to a PHP artisan command
+            // that uses plink (PuTTY) for SSH and PHP's native GZipStream for compression.
+            // The command writes heartbeat lines to stdout so the step log stays active during
+            // long dumps (WithCommandExecution treats 30 s of log inactivity as step complete).
+            $php = '"'.str_replace('"', '""', PHP_BINARY).'"';
+            $artisan = '"'.str_replace('"', '""', base_path('artisan')).'"';
+            $output = '"'.str_replace('"', '""', $localDumpPath).'"';
+
+            return "{$php} {$artisan} lando:mysqldump-ssh --remote-id={$remote->id} --output={$output}";
         }
 
         $trapCleanup = escapeshellarg('kill $LANDODEV_HB 2>/dev/null; wait $LANDODEV_HB 2>/dev/null');
@@ -103,6 +109,16 @@ class SshService
 
     public function buildRsyncPluginsCommand(RemoteSite $remote, string $localPluginsPath): string
     {
+        if ($this->platform->isWindows()) {
+            // rsync is unavailable on Windows. Delegate to a PHP artisan command that uses
+            // pscp (PuTTY SCP, bundled with plink) for recursive plugin download.
+            $php = '"'.str_replace('"', '""', PHP_BINARY).'"';
+            $artisan = '"'.str_replace('"', '""', base_path('artisan')).'"';
+            $output = '"'.str_replace('"', '""', $localPluginsPath).'"';
+
+            return "{$php} {$artisan} lando:rsync-plugins --remote-id={$remote->id} --output={$output}";
+        }
+
         $remotePlugins = $this->remotePluginsDirectory($remote);
         $host = "{$remote->ssh_user}@{$remote->ssh_server_ip}";
         $remoteArg = escapeshellarg($remotePlugins);

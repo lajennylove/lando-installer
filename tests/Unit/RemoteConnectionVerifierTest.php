@@ -5,14 +5,27 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\RemoteSite;
+use App\Services\DependencyChecker;
 use App\Services\RemoteConnectionVerifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Process;
+use Mockery;
 use Tests\TestCase;
 
 class RemoteConnectionVerifierTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // On Windows, getPlinkPath() is called before Process::run(). Stub it so tests
+        // exercise the Process-fake path instead of short-circuiting with "plink not found".
+        $this->instance(DependencyChecker::class, Mockery::mock(DependencyChecker::class, function ($mock) {
+            $mock->allows('getPlinkPath')->andReturn('plink')->byDefault();
+        }));
+    }
 
     public function test_succeeds_when_ssh_and_schema_dump_ok(): void
     {

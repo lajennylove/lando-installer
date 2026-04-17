@@ -70,8 +70,12 @@ class SshServiceTest extends TestCase
         $svc = new SshService($platform);
         $cmd = $svc->buildMysqldumpCommand($remote, '/local/dumpfile.sql.gz');
 
-        $this->assertStringContainsString('| gzip >', $cmd);
+        // Windows path delegates to the artisan command (uses plink + PHP gzip, no sshpass/pipefail)
+        $this->assertStringContainsString('lando:mysqldump-ssh', $cmd);
+        $this->assertStringContainsString('--remote-id=', $cmd);
+        $this->assertStringContainsString('--output=', $cmd);
         $this->assertStringNotContainsString('set -o pipefail', $cmd);
-        $this->assertStringNotContainsString('sshpass -e scp', $cmd);
+        $this->assertStringNotContainsString('sshpass', $cmd);
+        $this->assertStringNotContainsString('| gzip >', $cmd);
     }
 }
