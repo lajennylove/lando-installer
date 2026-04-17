@@ -63,6 +63,16 @@ class DependencyCheck extends Component
                 'required' => false,
             ];
         }
+
+        if ($platform->isWindows()) {
+            $this->dependencies['putty'] = [
+                'installed' => $checker->isPuttyInstalled(),
+                'version' => $checker->getPuttyVersion(),
+                'label' => 'PuTTY',
+                'description' => 'Required for SSH password auth when cloning remote sites',
+                'required' => false,
+            ];
+        }
     }
 
     public function install(string $dependency): void
@@ -166,7 +176,7 @@ class DependencyCheck extends Component
 
         if ($platform->isWindows()) {
             $log = addslashes($this->installLogFile);
-            $cmd = [...$platform->powershellArgs(), "& \"{$lando}\" setup --yes *> '{$log}'; Add-Content -Path '{$log}' -Value \"{$marker}\""];
+            $cmd = [...$platform->powershellArgs(), $platform->powershellUtf8Prefix()."& \"{$lando}\" setup --yes *> '{$log}'; Add-Content -Path '{$log}' -Value \"{$marker}\""];
         } else {
             $logArg = escapeshellarg($this->installLogFile);
             $markerArg = escapeshellarg($marker);

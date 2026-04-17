@@ -400,7 +400,7 @@ class Settings extends Component
 
         if ($platform->isWindows()) {
             $log = addslashes($this->landoUpdateLogFile);
-            $cmd = [...$platform->powershellArgs(), "& \"{$lando}\" update -y *> '{$log}'; Add-Content -Path '{$log}' -Value \"{$marker}\""];
+            $cmd = [...$platform->powershellArgs(), $platform->powershellUtf8Prefix()."& \"{$lando}\" update -y *> '{$log}'; Add-Content -Path '{$log}' -Value \"{$marker}\""];
         } else {
             $logArg = escapeshellarg($this->landoUpdateLogFile);
             $markerArg = escapeshellarg($marker);

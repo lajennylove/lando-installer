@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\RemoteSite;
+use App\Services\DependencyChecker;
+use App\Services\PlatformDetector;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 
@@ -14,6 +16,10 @@ use Illuminate\Support\Facades\Process;
  */
 final class RemoteConnectionVerifier
 {
+    public function __construct(
+        private PlatformDetector $platform,
+        private DependencyChecker $checker,
+    ) {}
     /**
      * @param  string|null  $sshPasswordOverride  Plain text; if null/empty, uses {@see RemoteSite::$ssh_password}
      * @param  string|null  $dbPasswordOverride  Plain text; if null/empty, uses {@see RemoteSite::$db_password}
@@ -51,16 +57,32 @@ final class RemoteConnectionVerifier
 
         $target = $remote->ssh_user.'@'.$remote->ssh_server_ip;
 
-        $sshProbe = Process::env(['SSHPASS' => $sshPass])
-            ->timeout(30)
-            ->run([
-                'sshpass', '-e', 'ssh', '-T',
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'ConnectTimeout=20',
-                '-o', 'BatchMode=no',
-                $target,
-                'echo', 'LANDODEV_SSH_OK',
+        if ($this->platform->isWindows()) {
+            $plinkPath = $this->checker->getPlinkPath();
+            if (! $plinkPath) {
+                return RemoteVerificationResult::sshFailed(
+                    'PuTTY (plink.exe) is not installed. Install it from Settings > System Dependencies, then retry.'
+                );
+            }
+
+            // No -batch: allows stdin to answer the host-key prompt on first connect.
+            // No -oStrictHostKeyChecking / -oConnectTimeout: those are OpenSSH flags; plink doesn't support them.
+            // Process timeout covers the connect-timeout use-case.
+            $sshProbe = Process::input("y\n")->timeout(30)->run([
+                $plinkPath, '-ssh', '-pw', $sshPass, '-T', $target, 'echo LANDODEV_SSH_OK',
             ]);
+        } else {
+            $sshProbe = Process::env(['SSHPASS' => $sshPass])
+                ->timeout(30)
+                ->run([
+                    'sshpass', '-e', 'ssh', '-T',
+                    '-o', 'StrictHostKeyChecking=no',
+                    '-o', 'ConnectTimeout=20',
+                    '-o', 'BatchMode=no',
+                    $target,
+                    'echo', 'LANDODEV_SSH_OK',
+                ]);
+        }
 
         $sshOut = $sshProbe->output().$sshProbe->errorOutput();
         $sshExitCode = $sshProbe->exitCode();
@@ -87,20 +109,34 @@ final class RemoteConnectionVerifier
             );
         }
 
-        $schemaProbe = Process::env(['SSHPASS' => $sshPass])
-            ->timeout(90)
-            ->run([
-                'sshpass', '-e', 'ssh', '-T',
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'ConnectTimeout=20',
-                $target,
-                'mysqldump',
-                '--no-data',
-                '--single-transaction',
-                '-u', $remote->db_user,
-                '-p'.$dbPass,
-                $remote->db_name,
+        if ($this->platform->isWindows()) {
+            // plink joins remaining args as the remote command; pass as a single string
+            // so special chars in db_user/db_name are handled by the remote shell.
+            $dbCmd = sprintf(
+                'mysqldump --no-data --single-transaction -u %s -p%s %s',
+                escapeshellarg((string) $remote->db_user),
+                escapeshellarg($dbPass),
+                escapeshellarg((string) $remote->db_name),
+            );
+            $schemaProbe = Process::input("y\n")->timeout(90)->run([
+                $plinkPath, '-ssh', '-pw', $sshPass, '-T', $target, $dbCmd,
             ]);
+        } else {
+            $schemaProbe = Process::env(['SSHPASS' => $sshPass])
+                ->timeout(90)
+                ->run([
+                    'sshpass', '-e', 'ssh', '-T',
+                    '-o', 'StrictHostKeyChecking=no',
+                    '-o', 'ConnectTimeout=20',
+                    $target,
+                    'mysqldump',
+                    '--no-data',
+                    '--single-transaction',
+                    '-u', $remote->db_user,
+                    '-p'.$dbPass,
+                    $remote->db_name,
+                ]);
+        }
 
         $dbOut = $schemaProbe->output().$schemaProbe->errorOutput();
         $dbExitCode = $schemaProbe->exitCode();

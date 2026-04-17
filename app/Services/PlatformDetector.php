@@ -105,6 +105,23 @@ class PlatformDetector
     }
 
     /**
+     * PowerShell snippet that must be prepended to any command that redirects
+     * output to a log file on Windows.
+     *
+     * Without this, PowerShell's *> / >> redirection uses the legacy Windows
+     * code page (cp1252/cp437), turning UTF-8 characters like ✔ (U+2714,
+     * bytes E2 9C 94) into garbled sequences such as "ΓêÜ".
+     *
+     * [Console]::OutputEncoding — how PS reads stdout from external processes.
+     * $OutputEncoding           — how PS writes to files via *> and >> streams.
+     */
+    public function powershellUtf8Prefix(): string
+    {
+        return '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
+            .'$OutputEncoding = [System.Text.Encoding]::UTF8; ';
+    }
+
+    /**
      * Wrap a shell command so step logging does not steal stdout from inner redirects/pipes.
      *
      * On Unix:  (command) > 'logfile' 2>&1
@@ -117,7 +134,7 @@ class PlatformDetector
         if ($this->isWindows()) {
             $log = str_replace("'", "''", $logFile); // escape PS single-quoted string
 
-            return "& { {$command} } *> '{$log}'";
+            return $this->powershellUtf8Prefix()."& { {$command} } *> '{$log}'";
         }
 
         $log = escapeshellarg($logFile);
