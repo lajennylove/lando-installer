@@ -52,6 +52,14 @@ class DependencyCheck extends Component
                 'description' => 'Container runtime engine',
                 'required' => true,
             ],
+            'lando-plugins' => [
+                'installed' => $checker->isLandoSetupComplete(),
+                'version' => null,
+                'label' => 'Lando Plugins',
+                'description' => 'WordPress recipe and common plugins (run lando setup)',
+                'required' => true,
+                'install_action' => 'runLandoSetup',
+            ],
         ];
 
         if ($platform->isMacAppleSilicon()) {
@@ -77,6 +85,13 @@ class DependencyCheck extends Component
 
     public function install(string $dependency): void
     {
+        // lando-plugins has its own install flow via runLandoSetup()
+        if ($dependency === 'lando-plugins') {
+            $this->runLandoSetup();
+
+            return;
+        }
+
         $installer = app(DependencyInstaller::class);
         $platform = app(PlatformDetector::class);
 
@@ -129,9 +144,10 @@ class DependencyCheck extends Component
 
         $this->checkDependencies();
 
-        // lando setup has no matching dependency key — detect completion via log marker
+        // lando setup: detect completion via log marker OR dependency check
         if ($this->installingDep === 'lando-setup') {
-            if (str_contains($this->installOutput, '[Lando Studio] lando setup finished')) {
+            $dep = $this->dependencies['lando-plugins'] ?? null;
+            if (($dep && $dep['installed']) || str_contains($this->installOutput, '[Lando Studio] lando setup finished')) {
                 $this->installing = false;
                 $this->installingDep = '';
                 $this->installLogFile = '';

@@ -24,7 +24,7 @@ class DependencyChecker
 
     public function allRequiredInstalled(): bool
     {
-        return $this->isLandoInstalled() && $this->isDockerInstalled();
+        return $this->isLandoInstalled() && $this->isDockerInstalled() && $this->isLandoSetupComplete();
     }
 
     public function isLandoInstalled(): bool
@@ -132,6 +132,35 @@ class DependencyChecker
     public function isWingetInstalled(): bool
     {
         return $this->platform->isWindows() && $this->commandExists('winget');
+    }
+
+    /**
+     * Whether `lando setup` has been run (common plugins are installed).
+     * Checks for the @lando/wordpress plugin which is required for site creation.
+     */
+    public function isLandoSetupComplete(): bool
+    {
+        $pluginDir = $this->getLandoPluginsDir();
+        if (! $pluginDir) {
+            return false;
+        }
+
+        return is_dir($pluginDir.DIRECTORY_SEPARATOR.'@lando'.DIRECTORY_SEPARATOR.'wordpress');
+    }
+
+    /**
+     * Resolve the Lando plugins directory (~/.lando/plugins).
+     */
+    private function getLandoPluginsDir(): ?string
+    {
+        $home = $this->platform->homeDir();
+        if (! $home) {
+            return null;
+        }
+
+        $dir = $home.DIRECTORY_SEPARATOR.'.lando'.DIRECTORY_SEPARATOR.'plugins';
+
+        return is_dir($dir) ? $dir : null;
     }
 
     public function getLandoVersion(): ?string
