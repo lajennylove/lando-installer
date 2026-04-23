@@ -5,14 +5,18 @@ config:
   php: "{{PHP_VERSION}}"
   via: apache
   database: mariadb:{{DB_VERSION}}
+  composer: false
+  composer_version: false
 
 services:
   appserver:
+    db_client: false
 {{CA_CERT_OVERRIDES}}    build_as_root:
 {{CA_CERT_BUILD_STEPS}}      - apt-get update -y && apt-get install -y vim openssh-client curl sshpass
       - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
       - apt-get install -y nodejs
       - npm install -g yarn
+      - curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
       - curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp && chmod +x /usr/local/bin/wp
 
   database:

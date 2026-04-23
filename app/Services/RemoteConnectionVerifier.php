@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\RemoteSite;
-use App\Services\DependencyChecker;
-use App\Services\PlatformDetector;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 
@@ -20,6 +18,7 @@ final class RemoteConnectionVerifier
         private PlatformDetector $platform,
         private DependencyChecker $checker,
     ) {}
+
     /**
      * @param  string|null  $sshPasswordOverride  Plain text; if null/empty, uses {@see RemoteSite::$ssh_password}
      * @param  string|null  $dbPasswordOverride  Plain text; if null/empty, uses {@see RemoteSite::$db_password}
@@ -29,6 +28,10 @@ final class RemoteConnectionVerifier
         ?string $sshPasswordOverride = null,
         ?string $dbPasswordOverride = null,
     ): RemoteVerificationResult {
+        // SSH + schema probes can take up to 120s combined; prevent PHP's
+        // max_execution_time (typically 30s) from killing the Livewire request.
+        set_time_limit(0);
+
         $sshPass = (is_string($sshPasswordOverride) && $sshPasswordOverride !== '')
             ? $sshPasswordOverride
             : (string) $remote->ssh_password;
@@ -65,12 +68,14 @@ final class RemoteConnectionVerifier
                 );
             }
 
-            // No -batch: allows stdin to answer the host-key prompt on first connect.
-            // No -oStrictHostKeyChecking / -oConnectTimeout: those are OpenSSH flags; plink doesn't support them.
-            // Process timeout covers the connect-timeout use-case.
-            $sshProbe = Process::input("y\n")->timeout(30)->run([
-                $plinkPath, '-ssh', '-pw', $sshPass, '-T', $target, 'echo LANDODEV_SSH_OK',
-            ]);
+            // Plink prompts for host-key acceptance on first connect. On Windows
+            // it reads the prompt from the console (CONIN$), NOT from stdin pipes,
+            // so Symfony Process::input() cannot answer it. Wrapping in PowerShell
+            // with "echo y |" properly pipes through the shell. When the key is
+            // already cached the "y" is harmlessly ignored.
+            $sshProbe = Process::timeout(30)->run(
+                $this->plinkViaPowerShell($plinkPath, $sshPass, $target, 'echo LANDODEV_SSH_OK')
+            );
         } else {
             $sshProbe = Process::env(['SSHPASS' => $sshPass])
                 ->timeout(30)
@@ -118,9 +123,9 @@ final class RemoteConnectionVerifier
                 escapeshellarg($dbPass),
                 escapeshellarg((string) $remote->db_name),
             );
-            $schemaProbe = Process::input("y\n")->timeout(90)->run([
-                $plinkPath, '-ssh', '-pw', $sshPass, '-T', $target, $dbCmd,
-            ]);
+            $schemaProbe = Process::timeout(90)->run(
+                $this->plinkViaPowerShell($plinkPath, $sshPass, $target, $dbCmd)
+            );
         } else {
             $schemaProbe = Process::env(['SSHPASS' => $sshPass])
                 ->timeout(90)
@@ -172,5 +177,26 @@ final class RemoteConnectionVerifier
         Log::info('RemoteConnectionVerifier: verification passed');
 
         return RemoteVerificationResult::success();
+    }
+
+    /**
+     * Build a PowerShell command array that pipes "y" into plink to auto-accept
+     * host-key prompts. Returns an array suitable for Process::run().
+     *
+     * @return list<string>
+     */
+    private function plinkViaPowerShell(string $plinkPath, string $password, string $target, string $remoteCmd): array
+    {
+        $esc = static fn (string $v): string => str_replace("'", "''", $v);
+
+        $ps = sprintf(
+            "echo y | & '%s' -ssh -pw '%s' -T '%s' '%s'",
+            $esc($plinkPath),
+            $esc($password),
+            $esc($target),
+            $esc($remoteCmd),
+        );
+
+        return ['powershell', '-NoProfile', '-Command', $ps];
     }
 }

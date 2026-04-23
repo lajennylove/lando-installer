@@ -46,6 +46,7 @@ trait WithCommandExecution
             'label' => $s['label'],
             'hint' => $s['hint'] ?? null,
             'timeout' => $s['timeout'] ?? 600,
+            'inactivity_timeout' => $s['inactivity_timeout'] ?? 30,
             'status' => 'pending',
             'output' => '',
         ], $stepDefinitions);
@@ -142,12 +143,26 @@ trait WithCommandExecution
             return;
         }
 
-        $content = LogContentUtf8::forLivewire((string) file_get_contents($logFile));
+        $rawContent = LogContentUtf8::forLivewire((string) file_get_contents($logFile));
+        $marker = PlatformDetector::STEP_DONE_MARKER;
+        $hasMarker = str_contains($rawContent, $marker);
+
+        // Strip the internal marker from user-facing output.
+        $content = str_replace($marker, '', $rawContent);
         $this->terminalOutput = $this->capLivewireOutput($this->completedOutput.$content);
         $this->dispatch('landodev-scroll-terminal');
         $this->steps[$this->currentStep]['output'] = $this->tailLines($content, 10);
 
-        // Overall timeout for a single step; default 10 min, but dump steps may override higher.
+        // ── 1. Completion marker present — process definitely exited ────────
+        // Check this BEFORE the wall-clock timeout so a step that finishes at
+        // 29:59 isn't falsely killed when the next poll happens at 30:01.
+        if ($hasMarker) {
+            $this->completeCurrentStep($site, $content);
+
+            return;
+        }
+
+        // ── 2. Overall timeout — safety net for truly stuck processes ────────
         $stepTimeout = $this->steps[$this->currentStep]['timeout'] ?? 600;
         if ($elapsed > $stepTimeout) {
             $timeoutMinutes = (int) round($stepTimeout / 60);
@@ -156,38 +171,44 @@ trait WithCommandExecution
             return;
         }
 
-        // Wait 30 seconds of inactivity before considering the step complete.
+        // ── 3. Inactivity fallback — marker not written (crash/kill) ────────
         // Lando commands have long pauses during builds (apt-get, node install,
         // healthchecks, "Continuing in 10 seconds..." warnings).
+        $inactivityTimeout = $this->steps[$this->currentStep]['inactivity_timeout'] ?? 30;
         $lastModified = filemtime($logFile);
-        if ((time() - $lastModified) > 30) {
-            $hasError = CommandLogErrorDetector::indicatesFailure($content);
-
-            if ($hasError) {
-                $this->failCurrentStep($site, $this->tailLines($content, 50));
-
-                return;
-            }
-
-            $this->steps[$this->currentStep]['status'] = 'completed';
-
-            // Accumulate this step's output for the full log
-            $stepLabel = $this->steps[$this->currentStep]['label'] ?? '';
-            $this->completedOutput .= "\n--- [{$stepLabel}] ---\n".$content."\n";
-            $this->completedOutput = $this->capLivewireOutput($this->completedOutput);
-
-            CommandLog::where('site_id', $site->id)
-                ->where('step_number', $this->currentStep)
-                ->where('status', 'running')
-                ->update([
-                    'status' => 'completed',
-                    'output' => $this->tailLines($content, 100),
-                    'completed_at' => now(),
-                ]);
-
-            $this->currentStep++;
-            $this->executeNextStep($this->getStepDefinitions(), $site);
+        if ((time() - $lastModified) > $inactivityTimeout) {
+            $this->completeCurrentStep($site, $content);
         }
+    }
+
+    private function completeCurrentStep(Site $site, string $content): void
+    {
+        $hasError = CommandLogErrorDetector::indicatesFailure($content);
+
+        if ($hasError) {
+            $this->failCurrentStep($site, $this->tailLines($content, 50));
+
+            return;
+        }
+
+        $this->steps[$this->currentStep]['status'] = 'completed';
+
+        // Accumulate this step's output for the full log
+        $stepLabel = $this->steps[$this->currentStep]['label'] ?? '';
+        $this->completedOutput .= "\n--- [{$stepLabel}] ---\n".$content."\n";
+        $this->completedOutput = $this->capLivewireOutput($this->completedOutput);
+
+        CommandLog::where('site_id', $site->id)
+            ->where('step_number', $this->currentStep)
+            ->where('status', 'running')
+            ->update([
+                'status' => 'completed',
+                'output' => $this->tailLines($content, 100),
+                'completed_at' => now(),
+            ]);
+
+        $this->currentStep++;
+        $this->executeNextStep($this->getStepDefinitions(), $site);
     }
 
     private function failCurrentStep(Site $site, string $errorMessage): void

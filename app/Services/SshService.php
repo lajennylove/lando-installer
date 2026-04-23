@@ -71,13 +71,17 @@ class SshService
         if ($this->platform->isWindows()) {
             // On Windows, sshpass and gzip are unavailable. Delegate to a PHP artisan command
             // that uses plink (PuTTY) for SSH and PHP's native GZipStream for compression.
-            // The command writes heartbeat lines to stdout so the step log stays active during
-            // long dumps (WithCommandExecution treats 30 s of log inactivity as step complete).
+            // The command writes heartbeat lines to stdout every 20 s so the step log stays
+            // active during long dumps (WithCommandExecution treats 30 s of log inactivity as
+            // step complete). PowerShell's *> redirect streams native-command stdout to the log
+            // file in real-time — no explicit flush is needed.
             $php = '"'.str_replace('"', '""', PHP_BINARY).'"';
             $artisan = '"'.str_replace('"', '""', base_path('artisan')).'"';
             $output = '"'.str_replace('"', '""', $localDumpPath).'"';
 
-            return "{$php} {$artisan} lando:mysqldump-ssh --remote-id={$remote->id} --output={$output}";
+            // & is the PowerShell call operator — without it, a quoted path like
+            // "C:\...\php.exe" is treated as a string expression, not a command.
+            return "& {$php} {$artisan} lando:mysqldump-ssh --remote-id={$remote->id} --output={$output}";
         }
 
         $trapCleanup = escapeshellarg('kill $LANDODEV_HB 2>/dev/null; wait $LANDODEV_HB 2>/dev/null');
@@ -116,7 +120,7 @@ class SshService
             $artisan = '"'.str_replace('"', '""', base_path('artisan')).'"';
             $output = '"'.str_replace('"', '""', $localPluginsPath).'"';
 
-            return "{$php} {$artisan} lando:rsync-plugins --remote-id={$remote->id} --output={$output}";
+            return "& {$php} {$artisan} lando:rsync-plugins --remote-id={$remote->id} --output={$output}";
         }
 
         $remotePlugins = $this->remotePluginsDirectory($remote);
@@ -146,6 +150,14 @@ class SshService
     public function buildHtaccessRewriteContent(string $remoteDomain): string
     {
         $remoteDomain = rtrim($remoteDomain, '/');
+
+        // Ensure HTTPS protocol so browsers don't block the redirect as mixed content
+        // when the local site is served over HTTPS (e.g. https://site.lndo.site).
+        if (! str_starts_with($remoteDomain, 'http://') && ! str_starts_with($remoteDomain, 'https://')) {
+            $remoteDomain = 'https://'.$remoteDomain;
+        } elseif (str_starts_with($remoteDomain, 'http://')) {
+            $remoteDomain = 'https://'.substr($remoteDomain, 7);
+        }
 
         return <<<HTACCESS
 # BEGIN WordPress

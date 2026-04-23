@@ -178,28 +178,41 @@ class SiteManager
         $name = $site->name;
         $adminPass = $adminPassword ?? 'admin';
 
-        $steps = [
+        $steps = [];
+
+        $platform = app(PlatformDetector::class);
+        if ($platform->isWindows()) {
+            $steps[] = [
+                'label' => 'Cleaning up stale Docker resources',
+                'command' => "docker ps -aq --filter \"name={$name}\" | ForEach-Object { docker rm -f \$_ } 2>\$null; "
+                    ."docker network ls --filter \"name={$name}_\" -q | ForEach-Object { docker network rm \$_ } 2>\$null; "
+                    ."Write-Host 'Docker cleanup complete.'",
+                'step' => 1,
+            ];
+        }
+
+        $steps = array_merge($steps, [
             [
                 'label' => 'Starting Lando environment',
                 'command' => $this->lando->start($path),
-                'step' => 1,
+                'step' => count($steps) + 1,
             ],
             [
                 'label' => 'Downloading WordPress core',
                 'command' => $this->lando->wpCoreDownload($path),
-                'step' => 2,
+                'step' => count($steps) + 2,
             ],
             [
                 'label' => 'Creating WordPress config',
                 'command' => $this->lando->wpConfigCreate($path),
-                'step' => 3,
+                'step' => count($steps) + 3,
             ],
             [
                 'label' => 'Installing WordPress',
                 'command' => $this->lando->wpCoreInstall($path, $name, (string) $site->admin_username, $adminPass, (string) $site->admin_email),
-                'step' => 4,
+                'step' => count($steps) + 4,
             ],
-        ];
+        ]);
 
         if (! $installSage) {
             return $steps;
@@ -215,21 +228,32 @@ class SiteManager
                 'label' => 'Installing Composer dependencies',
                 'command' => $this->lando->composerInstall($path, "wp/wp-content/themes/{$name}"),
                 'step' => 6,
+                'timeout' => 1800,
+                'inactivity_timeout' => 120,
             ],
             [
                 'label' => 'Installing Yarn dependencies',
                 'command' => $this->lando->yarn($path, "wp/wp-content/themes/{$name}"),
                 'step' => 7,
+                'timeout' => 600,
+                'inactivity_timeout' => 120,
             ],
             [
                 'label' => 'Building theme assets',
                 'command' => $this->lando->yarn($path, "wp/wp-content/themes/{$name}", 'build'),
                 'step' => 8,
+                'timeout' => 600,
+                'inactivity_timeout' => 120,
+            ],
+            [
+                'label' => 'Clearing view cache',
+                'command' => $this->lando->clearAcornCache($path),
+                'step' => 9,
             ],
             [
                 'label' => 'Activating theme',
                 'command' => $this->lando->wpThemeActivate($path, $name),
-                'step' => 9,
+                'step' => 10,
             ],
         ]);
     }
@@ -274,35 +298,64 @@ class SiteManager
     {
         $path = $site->path;
         $name = $site->name;
-        $dumpFile = "{$path}/dumpfile.sql.gz";
+        $dumpFile = rtrim($path, '/\\').DIRECTORY_SEPARATOR.'dumpfile.sql.gz';
 
-        $steps = [
-            [
-                'label' => 'Starting Lando environment',
-                'command' => $this->lando->start($path),
+        $steps = [];
+
+        // On Windows, a previous failed destroy may leave stale Docker containers /
+        // networks with the same site name, causing port-conflict errors on lando start.
+        // Remove them proactively before starting.
+        $platform = app(PlatformDetector::class);
+        if ($platform->isWindows()) {
+            $steps[] = [
+                'label' => 'Cleaning up stale Docker resources',
+                'command' => "docker ps -aq --filter \"name={$name}\" | ForEach-Object { docker rm -f \$_ } 2>\$null; "
+                    ."docker network ls --filter \"name={$name}_\" -q | ForEach-Object { docker network rm \$_ } 2>\$null; "
+                    ."Write-Host 'Docker cleanup complete.'",
                 'step' => 1,
-            ],
+            ];
+        }
+
+        $steps[] = [
+            'label' => 'Starting Lando environment',
+            'command' => $this->lando->start($path),
+            'step' => count($steps) + 1,
+        ];
+
+        // On Windows, Docker Desktop may silently skip build_as_root curl steps,
+        // leaving WP-CLI missing. Explicitly install it into the running container.
+        $ensureWpCli = $this->lando->ensureWpCli($path);
+        if ($ensureWpCli !== null) {
+            $steps[] = [
+                'label' => 'Ensuring WP-CLI is available',
+                'command' => $ensureWpCli,
+                'step' => count($steps) + 1,
+            ];
+        }
+
+        $steps = array_merge($steps, [
             [
                 'label' => 'Downloading WordPress core',
                 'command' => $this->lando->wpCoreDownload($path),
-                'step' => 2,
+                'step' => count($steps) + 1,
             ],
             [
                 'label' => 'Dumping remote database',
                 'hint' => 'Streams SQL over SSH then compresses locally — nothing is written on the remote server. Expect 2–10 minutes depending on database size.',
                 'timeout' => 1200,
                 'command' => $this->ssh->buildMysqldumpCommand($remoteSite, $dumpFile),
-                'step' => 3,
+                'step' => count($steps) + 2,
             ],
             [
                 'label' => 'Validating dump file',
                 'command' => $this->validateDumpFileCommand($dumpFile),
-                'step' => 4,
+                'step' => count($steps) + 3,
             ],
             [
                 'label' => 'Importing database',
                 'command' => $this->lando->dbImport($path, 'dumpfile.sql.gz'),
-                'step' => 5,
+                'timeout' => 1200,
+                'step' => count($steps) + 4,
             ],
             [
                 'label' => 'Creating WordPress config',
@@ -323,26 +376,23 @@ class SiteManager
             ],
             [
                 'label' => 'Activating local theme',
-                // The production DB stores the theme folder name used on the server (e.g. "locker-room").
-                // We clone into a folder named after remote_sites.theme_name (e.g. "lockerroom").
-                // These can differ, causing WordPress to silently output nothing. Force both options
-                // to match the local folder name so the theme is found and rendered correctly.
                 'command' => $remoteSite->theme_name
-                    ? 'cd '.escapeshellarg($path)." && {$this->lando->getLandoPath()} wp option update template ".escapeshellarg($remoteSite->theme_name)." --path=wp && {$this->lando->getLandoPath()} wp option update stylesheet ".escapeshellarg($remoteSite->theme_name).' --path=wp'
-                    : 'echo "No theme configured, skipping theme activation"',
+                    ? $this->activateThemeCommand($path, $remoteSite->theme_name)
+                    : ($this->platform->isWindows() ? 'Write-Host "No theme configured, skipping theme activation"' : 'echo "No theme configured, skipping theme activation"'),
                 'step' => 9,
             ],
             [
                 'label' => 'Syncing plugins from remote',
-                'command' => $this->ssh->buildRsyncPluginsCommand($remoteSite, "{$path}/wp/wp-content/plugins/"),
+                'command' => $this->ssh->buildRsyncPluginsCommand($remoteSite, $path.DIRECTORY_SEPARATOR.'wp'.DIRECTORY_SEPARATOR.'wp-content'.DIRECTORY_SEPARATOR.'plugins'),
+                'timeout' => 1800,
                 'step' => 10,
             ],
             [
                 'label' => 'Configuring image proxy',
-                'command' => 'echo '.escapeshellarg($this->ssh->buildHtaccessRewriteContent($remoteSite->remote_domain))." > {$path}/wp/.htaccess",
+                'command' => $this->htaccessCommand($path, $remoteSite->remote_domain),
                 'step' => 11,
             ],
-        ];
+        ]);
 
         $themeSubdir = $remoteSite->theme_name
             ? "wp/wp-content/themes/{$remoteSite->theme_name}"
@@ -352,22 +402,17 @@ class SiteManager
         $stepNum = 12;
         $steps[] = [
             'label' => 'Cloning theme repository',
-            // --progress forces git to write progress lines to stderr even when stderr is not a TTY
-            // (which it isn't — it's redirected to the step log file). Without it, git is silent
-            // after "Cloning into '...'..." and the 30s log-idle timer fires prematurely, advancing
-            // to the Composer step before the clone finishes — so composer.json isn't there yet.
-            // The trailing echo writes one final line after git exits, confirming the clone is done.
             'command' => $remoteSite->repo_url
-                ? "cd {$path}/wp/wp-content/themes && git clone --progress {$remoteSite->repo_url} {$remoteSite->theme_name} && echo \"Theme cloned successfully.\""
-                : 'echo "No repo URL configured, skipping theme clone"',
+                ? $this->gitCloneCommand($path, $remoteSite->repo_url, $remoteSite->theme_name)
+                : ($this->platform->isWindows() ? 'Write-Host "No repo URL configured, skipping theme clone"' : 'echo "No repo URL configured, skipping theme clone"'),
             'step' => $stepNum++,
         ];
 
         if ($cloneTheme) {
-            $themePath = "{$path}/wp/wp-content/themes/{$remoteSite->theme_name}";
+            $themePath = $path.DIRECTORY_SEPARATOR.'wp'.DIRECTORY_SEPARATOR.'wp-content'.DIRECTORY_SEPARATOR.'themes'.DIRECTORY_SEPARATOR.$remoteSite->theme_name;
             $steps[] = [
                 'label' => 'Switching to dev branch',
-                'command' => "cd {$themePath} && git checkout dev && echo \"Switched to branch: $(git branch --show-current)\"",
+                'command' => $this->gitCheckoutCommand($themePath, 'dev'),
                 'step' => $stepNum++,
             ];
         }
@@ -377,6 +422,8 @@ class SiteManager
                 'label' => 'Installing Composer dependencies',
                 'command' => $this->lando->composerInstall($path, $themeSubdir),
                 'step' => $stepNum++,
+                'timeout' => 1800,
+                'inactivity_timeout' => 120,
             ];
         }
 
@@ -385,6 +432,8 @@ class SiteManager
                 'label' => 'Installing Node dependencies',
                 'command' => $this->lando->yarn($path, $themeSubdir),
                 'step' => $stepNum++,
+                'timeout' => 600,
+                'inactivity_timeout' => 120,
             ];
         }
 
@@ -393,6 +442,17 @@ class SiteManager
             'command' => $remoteSite->theme_name && $themeSubdir
                 ? $this->lando->yarn($path, $themeSubdir, 'build')
                 : 'echo "No theme configured, skipping build"',
+            'step' => $stepNum++,
+            'timeout' => 600,
+            'inactivity_timeout' => 120,
+        ];
+
+        // Lando health-checks compile Blade views before the Vite build creates
+        // manifest.json, caching a "manifest not found" fatal error.  Clear the
+        // Acorn view cache so the first real page load recompiles cleanly.
+        $steps[] = [
+            'label' => 'Clearing view cache',
+            'command' => $this->lando->clearAcornCache($path),
             'step' => $stepNum++,
         ];
 
@@ -404,6 +464,15 @@ class SiteManager
      */
     private function cloneWpConfigCommand(string $path, Site $site): string
     {
+        if ($this->platform->isWindows()) {
+            $php = '"'.str_replace('"', '""', PHP_BINARY).'"';
+            $artisan = '"'.str_replace('"', '""', base_path('artisan')).'"';
+            $psPath = str_replace("'", "''", $path);
+            $siteId = (string) $site->id;
+
+            return "& {$php} {$artisan} lando-dev:clone-wp-config '{$psPath}' '{$siteId}'";
+        }
+
         return sprintf(
             '%s %s lando-dev:clone-wp-config %s %s',
             escapeshellarg(PHP_BINARY),
@@ -415,12 +484,17 @@ class SiteManager
 
     private function validateDumpFileCommand(string $dumpFile): string
     {
-        $escaped = escapeshellarg($dumpFile);
         $minBytes = 500;
 
         if ($this->platform->isWindows()) {
-            return "powershell -Command \"if ((Get-Item {$escaped}).Length -lt {$minBytes}) { Write-Error 'Dump file is too small or empty - mysqldump may have failed'; exit 1 } else { Write-Host 'Dump file validated' }\"";
+            // The command runs inside PowerShell already (wrapCommandWithLogRedirect).
+            // Use single-quoted PS path to avoid any double-quote nesting issues.
+            $psPath = str_replace("'", "''", str_replace('/', '\\', $dumpFile));
+
+            return "if ((Get-Item '{$psPath}').Length -lt {$minBytes}) { Write-Error 'Dump file is too small or empty - mysqldump may have failed'; exit 1 } else { Write-Host 'Dump file validated' }";
         }
+
+        $escaped = escapeshellarg($dumpFile);
 
         return "if [ ! -s {$escaped} ] || [ \$(stat -f%z {$escaped} 2>/dev/null || stat -c%s {$escaped} 2>/dev/null) -lt {$minBytes} ]; then echo 'ERROR: Dump file is too small or empty - mysqldump may have failed. Check SSH credentials and remote database settings.' >&2; exit 1; fi; if ! gzip -t {$escaped}; then echo 'ERROR: dumpfile.sql.gz is not a complete gzip archive (transfer or dump may have been interrupted).' >&2; exit 1; fi; echo 'Dump file validated:' && ls -lh {$escaped}";
     }
@@ -433,21 +507,95 @@ class SiteManager
             $winGz = str_replace('/', '\\', $dumpFile);
             $winSql = str_replace('/', '\\', $sqlFile);
 
-            return 'del /f /q '.escapeshellarg($winGz).' '.escapeshellarg($winSql).' 2>nul & echo Dump file removed.';
+            return "Remove-Item -Force -ErrorAction SilentlyContinue '{$winGz}', '{$winSql}'; Write-Host 'Dump file removed.'";
         }
 
         return 'rm -f '.escapeshellarg($dumpFile).' '.escapeshellarg($sqlFile)." && echo 'Removed local dump files (dumpfile.sql / .gz).'";
     }
 
+    private function activateThemeCommand(string $path, string $themeName): string
+    {
+        if ($this->platform->isWindows()) {
+            $lando = $this->lando->getLandoPath();
+            $psLando = '& "'.str_replace('"', '""', $lando).'"';
+            $psTheme = str_replace("'", "''", $themeName);
+
+            return "Set-Location \"{$path}\"; {$psLando} wp option update template '{$psTheme}' --path=wp; {$psLando} wp option update stylesheet '{$psTheme}' --path=wp";
+        }
+
+        return 'cd '.escapeshellarg($path)." && {$this->lando->getLandoPath()} wp option update template ".escapeshellarg($themeName)." --path=wp && {$this->lando->getLandoPath()} wp option update stylesheet ".escapeshellarg($themeName).' --path=wp';
+    }
+
+    private function htaccessCommand(string $path, ?string $remoteDomain): string
+    {
+        $content = $this->ssh->buildHtaccessRewriteContent($remoteDomain);
+
+        if ($this->platform->isWindows()) {
+            $htaccessPath = $path.DIRECTORY_SEPARATOR.'wp'.DIRECTORY_SEPARATOR.'.htaccess';
+            $psPath = str_replace("'", "''", $htaccessPath);
+            $psContent = str_replace("'", "''", $content);
+
+            // PS5's -Encoding UTF8 writes a BOM (\xef\xbb\xbf) which Apache
+            // treats as an invalid directive, causing a 500 error.
+            // Use .NET's BOM-free UTF8 encoder instead.
+            return '$utf8 = New-Object System.Text.UTF8Encoding($false); '
+                ."[System.IO.File]::WriteAllText('{$psPath}', '{$psContent}', \$utf8); "
+                ."Write-Host '.htaccess configured'";
+        }
+
+        return 'echo '.escapeshellarg($content)." > {$path}/wp/.htaccess";
+    }
+
+    private function gitCloneCommand(string $path, string $repoUrl, string $themeName): string
+    {
+        if ($this->platform->isWindows()) {
+            $themesDir = $path.DIRECTORY_SEPARATOR.'wp'.DIRECTORY_SEPARATOR.'wp-content'.DIRECTORY_SEPARATOR.'themes';
+
+            return "Set-Location \"{$themesDir}\"; git clone --progress {$repoUrl} {$themeName}; Write-Host 'Theme cloned successfully.'";
+        }
+
+        return "cd {$path}/wp/wp-content/themes && git clone --progress {$repoUrl} {$themeName} && echo \"Theme cloned successfully.\"";
+    }
+
+    private function gitCheckoutCommand(string $path, string $branch): string
+    {
+        if ($this->platform->isWindows()) {
+            return "Set-Location \"{$path}\"; git checkout {$branch}; Write-Host \"Switched to branch: {$branch}\"";
+        }
+
+        return "cd {$path} && git checkout {$branch} && echo \"Switched to branch: \$(git branch --show-current)\"";
+    }
+
     public function destroySite(Site $site): string
     {
+        $platform = app(PlatformDetector::class);
+
+        if ($platform->isWindows()) {
+            $landoDestroy = $this->lando->destroy($site->path);
+            $name = $site->name;
+
+            // After lando destroy, force-remove any lingering Docker containers and
+            // networks that share the site name. On Windows, lando's stderr warnings
+            // (NativeCommandError) can interfere with cleanup, leaving stale port
+            // bindings that block the next lando start for a same-named site.
+            $dockerCleanup = "docker ps -aq --filter \"name={$name}\" | ForEach-Object { docker rm -f \$_ } 2>\$null; "
+                ."docker network ls --filter \"name={$name}_\" -q | ForEach-Object { docker network rm \$_ } 2>\$null";
+
+            return "{$landoDestroy}; {$dockerCleanup}";
+        }
+
         return $this->lando->destroy($site->path);
     }
 
     public function getDeletePath(Site $site): string
     {
         if (app(PlatformDetector::class)->isWindows()) {
-            return "rmdir /s /q \"{$site->path}\"";
+            $path = app(PlatformDetector::class)->normalizePathSeparators($site->path);
+
+            // cmd's rmdir handles Windows file locks more reliably than Remove-Item.
+            // A brief pause lets Docker Desktop release handles after lando destroy.
+            // PS5 doesn't support &&; use ; to unconditionally run Write-Host.
+            return 'Start-Sleep -Seconds 2; cmd /c rmdir /s /q "'.$path.'"; Write-Host \'Site folder removed.\'';
         }
 
         return "rm -rf '{$site->path}'";
@@ -483,7 +631,7 @@ class SiteManager
     {
         $path = $site->path;
         $localTheme = $localThemeName ?: $site->theme_name ?: null;
-        $dumpFile = "{$path}/dumpfile.sql.gz";
+        $dumpFile = rtrim($path, '/\\').DIRECTORY_SEPARATOR.'dumpfile.sql.gz';
         $localUrl = "https://{$site->name}.lndo.site";
 
         $steps = [
@@ -502,6 +650,7 @@ class SiteManager
             [
                 'label' => 'Importing database',
                 'command' => $this->lando->dbImport($path, 'dumpfile.sql.gz'),
+                'timeout' => 1200,
                 'step' => 3,
             ],
             [

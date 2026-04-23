@@ -17,9 +17,17 @@ class PlatformDetectorShellWrapTest extends TestCase
 
         $wrapped = $p->wrapCommandWithLogRedirect($inner, $log);
 
-        $this->assertStringStartsWith('(', $wrapped);
-        $this->assertStringContainsString(') > ', $wrapped);
-        $this->assertStringEndsWith(' 2>&1', $wrapped);
         $this->assertStringContainsString($inner, $wrapped);
+        // Completion marker must be appended after the command
+        $this->assertStringContainsString(PlatformDetector::STEP_DONE_MARKER, $wrapped);
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->assertStringContainsString('*>', $wrapped);
+            $this->assertStringContainsString('Add-Content', $wrapped);
+        } else {
+            $this->assertStringStartsWith('(', $wrapped);
+            $this->assertStringContainsString(') > ', $wrapped);
+            $this->assertStringContainsString('2>&1', $wrapped);
+        }
     }
 }

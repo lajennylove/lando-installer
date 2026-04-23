@@ -70,17 +70,23 @@ class RsyncPluginsCommand extends Command
         $cmd = [
             $pscpPath,
             '-batch',
+            '-scp',  // force SCP protocol — SFTP mode fails on absolute paths
             '-pw', (string) $remote->ssh_password,
-            '-oStrictHostKeyChecking=no',
             '-r',  // recursive
             "{$host}:{$remotePlugins}",
             rtrim($localPluginsPath, '/\\'),
         ];
 
+        // On Windows, stream_set_blocking(false) silently fails on proc_open pipes,
+        // causing fread() to block indefinitely. Use temp files for stdout/stderr
+        // and poll proc_get_status for completion.
+        $stdoutPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'lando-pscp-'.uniqid().'.out';
+        $stderrPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'lando-pscp-'.uniqid().'.err';
+
         $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'r'],
-            2 => ['pipe', 'r'],
+            0 => ['pipe', 'r'],                // stdin  (child reads — closed immediately)
+            1 => ['file', $stdoutPath, 'w'],   // stdout → pscp progress
+            2 => ['file', $stderrPath, 'w'],   // stderr → error messages
         ];
 
         $proc = proc_open($cmd, $descriptors, $pipes);
@@ -90,8 +96,6 @@ class RsyncPluginsCommand extends Command
             return self::FAILURE;
         }
 
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
         fclose($pipes[0]);
 
         $lastHeartbeat = time();
@@ -99,14 +103,8 @@ class RsyncPluginsCommand extends Command
         while (true) {
             $status = proc_get_status($proc);
 
-            $out = fread($pipes[1], 4096);
-            if ($out !== false && $out !== '') {
-                $this->line(rtrim($out));
-            }
-
-            $err = fread($pipes[2], 4096);
-            if ($err !== false && $err !== '') {
-                $this->line('[pscp] '.rtrim($err));
+            if (! $status['running']) {
+                break;
             }
 
             if (time() - $lastHeartbeat >= 20) {
@@ -114,22 +112,28 @@ class RsyncPluginsCommand extends Command
                 $lastHeartbeat = time();
             }
 
-            if (! $status['running']) {
-                while (! feof($pipes[1])) {
-                    $o = fread($pipes[1], 4096);
-                    if ($o !== false && $o !== '') {
-                        $this->line(rtrim($o));
-                    }
-                }
-                break;
-            }
-
-            usleep(100_000);
+            usleep(500_000);
         }
 
-        fclose($pipes[1]);
-        fclose($pipes[2]);
         $exitCode = proc_close($proc);
+
+        // Report stdout (pscp progress)
+        if (file_exists($stdoutPath)) {
+            $out = trim((string) file_get_contents($stdoutPath));
+            if ($out !== '') {
+                $this->line($out);
+            }
+            @unlink($stdoutPath);
+        }
+
+        // Report stderr
+        if (file_exists($stderrPath)) {
+            $err = trim((string) file_get_contents($stderrPath));
+            if ($err !== '') {
+                $this->line('[pscp] '.$err);
+            }
+            @unlink($stderrPath);
+        }
 
         if ($exitCode !== 0) {
             $this->error("[Lando Studio ERROR] pscp exited with code {$exitCode}. Check SSH credentials.");

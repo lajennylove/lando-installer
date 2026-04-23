@@ -79,6 +79,26 @@ class LandoService
     }
 
     /**
+     * On Windows, build_as_root curl can fail silently in Docker Desktop,
+     * leaving WP-CLI missing. This command installs it inside the running
+     * container if not already present — a no-op on Linux/macOS where
+     * build_as_root runs reliably.
+     */
+    public function ensureWpCli(string $path): ?string
+    {
+        if (! $this->platform->isWindows()) {
+            return null;
+        }
+
+        $install = 'which wp > /dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp && chmod +x /usr/local/bin/wp && echo WP-CLI installed)';
+        $escapedPath = $this->escapePath($path);
+        $lando = $this->getLandoPath();
+        $psLando = '& "'.str_replace('"', '""', $lando).'"';
+
+        return "Set-Location {$escapedPath}; {$psLando} exec appserver -- bash -c \"{$install}\"";
+    }
+
+    /**
      * Same as: lando wp search-replace 'old' 'new' --all-tables --path=wp
      */
     public function wpSearchReplace(string $path, string $from, string $to): string
@@ -120,6 +140,49 @@ class LandoService
      */
     public function dbImport(string $path, string $dumpFile): string
     {
+        if ($this->platform->isWindows()) {
+            // Run gzip → mysql entirely inside the container via `lando ssh`.
+            // This avoids a 2+ GB intermediate .sql file and keeps a bash heartbeat
+            // alive so WithCommandExecution's 30 s log-inactivity timer doesn't fire
+            // prematurely on large databases.
+            //
+            // The bash script is written to a .sh file first (mounted as /app/ inside
+            // the container) to avoid PowerShell → Windows → lando → bash quoting hell.
+            $dbName = config('lando_dev.defaults.db_name');
+            $dbUser = config('lando_dev.defaults.db_user');
+            $dbPass = config('lando_dev.defaults.db_password');
+            $dbHost = config('lando_dev.defaults.db_host');
+
+            $lando = $this->getLandoPath();
+            $psLando = '& "'.str_replace('"', '""', $lando).'"';
+            $escapedPath = $this->escapePath($path);
+
+            $bashScript = implode("\n", [
+                '#!/bin/bash',
+                'echo "[Lando Studio] Starting database import..."',
+                '(while sleep 20; do echo "[Lando Studio] Database import in progress $(date +%H:%M:%S)"; done &)',
+                'HB=$!',
+                "gzip -dc /app/{$dumpFile} | mysql --skip-ssl -u {$dbUser} -p{$dbPass} -h {$dbHost} {$dbName}",
+                'EC=$?',
+                'kill $HB 2>/dev/null; wait $HB 2>/dev/null',
+                'if [ $EC -eq 0 ]; then',
+                '  echo "[Lando Studio] Database import complete"',
+                'else',
+                '  echo "[Lando Studio ERROR] Database import failed (exit code $EC)"',
+                '  exit $EC',
+                'fi',
+            ]);
+
+            // Escape for PowerShell single-quoted here-string content (double any single quotes).
+            $psScript = str_replace("'", "''", $bashScript);
+
+            return "Set-Location {$escapedPath}"
+                // Write the script with LF line endings and NO BOM so bash can execute it.
+                ."; [System.IO.File]::WriteAllText((Join-Path (Get-Location) '.lando-import.sh'), '{$psScript}', (New-Object System.Text.UTF8Encoding(\$false)))"
+                ."; {$psLando} ssh -c 'bash /app/.lando-import.sh'"
+                ."; Remove-Item -Force '.lando-import.sh' -ErrorAction SilentlyContinue";
+        }
+
         $escapedPath = $this->escapePath($path);
         $dumpArg = escapeshellarg($dumpFile);
         $lando = $this->getLandoPath();
@@ -129,36 +192,50 @@ class LandoService
 
     public function composerCreateProject(string $path, string $package, string $name): string
     {
-        $escapedPath = $this->escapePath($path);
-        $lando = $this->getLandoPath();
-
-        // Use 'lando composer' tooling (defined in .lando.yml) so Composer runs inside the
-        // appserver container with the correct PHP version and environment — not via lando ssh.
-        // --working-dir tells Composer to treat the themes directory as CWD; $name is the
-        // target sub-directory that create-project will create inside it.
-        return "cd {$escapedPath} && {$lando} composer create-project {$package} {$name} --working-dir=/app/wp/wp-content/themes";
+        // Use ssh -c with bash -c so COMPOSER_PROCESS_TIMEOUT env var is set by the shell.
+        // lando ssh -c execs directly (no shell), so we need bash to interpret the env var.
+        return $this->buildCommand($path, "ssh -c \"bash -c 'COMPOSER_PROCESS_TIMEOUT=0 composer create-project {$package} {$name} --working-dir=/app/wp/wp-content/themes'\"");
     }
 
     public function composerInstall(string $path, string $subdir): string
     {
-        $escapedPath = $this->escapePath($path);
-        $lando = $this->getLandoPath();
-
-        // Use 'lando composer' tooling instead of 'lando ssh -c "composer install"'.
-        // --working-dir points Composer at the theme directory where composer.json lives.
-        return "cd {$escapedPath} && {$lando} composer install --working-dir=/app/{$subdir}";
+        // Disable Composer's internal process timeout so large package extractions
+        // (e.g. google/apiclient-services) don't fail mid-unzip.
+        // lando ssh -c execs directly (no shell), so we need bash to interpret the env var.
+        return $this->buildCommand($path, "ssh -c \"bash -c 'COMPOSER_PROCESS_TIMEOUT=0 composer install --working-dir=/app/{$subdir}'\"");
     }
 
     public function yarn(string $path, string $subdir, ?string $command = null): string
     {
-        $yarnCmd = $command ? "yarn {$command}" : 'yarn';
+        if ($command) {
+            $yarnCmd = "yarn {$command}";
+        } else {
+            // --ignore-scripts prevents postinstall hooks from running during
+            // install, which can fail when binaries (e.g. vite) are not yet
+            // in $PATH. The separate "yarn build" step handles compilation.
+            $yarnCmd = 'yarn install --ignore-scripts';
+        }
 
-        return $this->wrapInShell("cd {$this->escapePath($path)} && {$this->getLandoPath()} ssh -u root -c \"cd /app/{$subdir} && {$yarnCmd}\"");
+        // The command runs inside the Lando container via `lando ssh`, so the inner
+        // `cd /app/... && yarn` is bash regardless of the host OS.
+        return $this->buildCommand($path, "ssh -u root -c \"cd /app/{$subdir} && {$yarnCmd}\"");
     }
 
     public function info(string $path): string
     {
         return $this->buildCommand($path, 'info --format=json');
+    }
+
+    /**
+     * Remove Acorn's compiled view cache inside the container.
+     *
+     * Lando health-check requests can compile Blade views before the Vite
+     * build produces manifest.json, caching a fatal "manifest not found"
+     * error.  Clearing the view cache after the build forces recompilation.
+     */
+    public function clearAcornCache(string $path): string
+    {
+        return $this->buildCommand($path, 'ssh -c "rm -rf /app/wp/wp-content/cache/acorn/framework/views/*"');
     }
 
     public function isRunning(string $path, ?string $appName = null): bool
@@ -275,6 +352,32 @@ class LandoService
         $escapedPath = $this->escapePath($path);
         $toArg = escapeshellarg($localUrl);
 
+        if ($this->platform->isWindows()) {
+            $psLando = '& "'.str_replace('"', '""', $lando).'"';
+            $psLocalUrl = str_replace("'", "''", $localUrl);
+
+            // PowerShell 5.1 compatible: get siteurl, search-replace, optionally fix theme slug.
+            $cmd = "Set-Location {$escapedPath}"
+                ."; \$REMOTE_URL = ({$psLando} wp option get siteurl --path=wp 2>\$null | Select-Object -Last 1)"
+                .'; if ($REMOTE_URL) { $REMOTE_URL = $REMOTE_URL.Trim() }'
+                ."; Write-Host \"Replacing: \$REMOTE_URL -> {$psLocalUrl}\""
+                ."; {$psLando} wp search-replace \"\$REMOTE_URL\" '{$psLocalUrl}' --all-tables --path=wp";
+
+            if ($localThemeName) {
+                $psThemeName = str_replace("'", "''", $localThemeName);
+                $cmd .= "; \$PROD_THEME = ({$psLando} wp option get template --path=wp 2>\$null | Select-Object -Last 1)"
+                    .'; if ($PROD_THEME) { $PROD_THEME = $PROD_THEME.Trim() }'
+                    ."; if (\$PROD_THEME -ne '{$psThemeName}') {"
+                    ."   Write-Host \"Theme slug mismatch: \$PROD_THEME -> {$psThemeName}\";"
+                    ."   {$psLando} wp search-replace \"\$PROD_THEME\" '{$psThemeName}' --all-tables --path=wp"
+                    .' } else {'
+                    .'   Write-Host "Theme slug matches: $PROD_THEME"'
+                    .' }';
+            }
+
+            return $cmd;
+        }
+
         $cmd = "cd {$escapedPath}"
             ." && REMOTE_URL=\$({$lando} wp option get siteurl --path=wp 2>/dev/null | tail -1 | tr -d '\\r\\n')"
             ." && echo \"Replacing: \$REMOTE_URL -> {$localUrl}\""
@@ -291,9 +394,7 @@ class LandoService
                 .' fi';
         }
 
-        return $this->platform->isWindows()
-            ? $cmd
-            : $this->withHeartbeat('[Lando Studio] Domain replacement in progress', $cmd);
+        return $this->withHeartbeat('[Lando Studio] Domain replacement in progress', $cmd);
     }
 
     private function withHeartbeat(string $message, string $command): string

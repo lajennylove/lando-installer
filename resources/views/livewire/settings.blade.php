@@ -88,7 +88,7 @@
                     class="text-sm bg-transparent border-0 text-right cursor-pointer focus:ring-0 p-0 dark:text-white"
                 >
                     @foreach($phpVersions as $v)
-                        <option value="{{ $v }}" @selected($v === $defaultPhpVersion)>{{ $v }}</option>
+                        <option value="{{ $v }}" class="bg-white text-zinc-900 dark:bg-zinc-800 dark:text-white" @selected($v === $defaultPhpVersion)>{{ $v }}</option>
                     @endforeach
                 </select>
             </div>
@@ -99,7 +99,7 @@
                     class="text-sm bg-transparent border-0 text-right cursor-pointer focus:ring-0 p-0 dark:text-white"
                 >
                     @foreach($dbVersions as $v)
-                        <option value="{{ $v }}" @selected($v === $defaultDbVersion)>{{ $v }}</option>
+                        <option value="{{ $v }}" class="bg-white text-zinc-900 dark:bg-zinc-800 dark:text-white" @selected($v === $defaultDbVersion)>{{ $v }}</option>
                     @endforeach
                 </select>
             </div>
@@ -110,7 +110,7 @@
                     class="text-sm bg-transparent border-0 text-right cursor-pointer focus:ring-0 p-0 dark:text-white"
                 >
                     @foreach($redisVersions as $v)
-                        <option value="{{ $v }}" @selected($v === $defaultRedisVersion)>{{ $v }}</option>
+                        <option value="{{ $v }}" class="bg-white text-zinc-900 dark:bg-zinc-800 dark:text-white" @selected($v === $defaultRedisVersion)>{{ $v }}</option>
                     @endforeach
                 </select>
             </div>
@@ -569,7 +569,7 @@
                                         <td class="px-3 py-2 text-zinc-600 dark:text-zinc-400">
                                             {{ $row['data']['theme_name'] ?: '—' }}
                                         </td>
-                                        <td class="px-3 py-2">
+                                        <td class="px-3 py-2 whitespace-nowrap">
                                             @if($row['exists'])
                                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                                                     ⚠ Update

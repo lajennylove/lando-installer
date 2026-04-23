@@ -55,12 +55,15 @@ class MysqldumpSshCommand extends Command
         $target = "{$remote->ssh_user}@{$remote->ssh_server_ip}";
 
         // Build the remote mysqldump invocation.
-        // escapeshellarg() on Windows uses double-quotes; bash on the remote server accepts them.
+        // The command runs on a remote LINUX bash shell via plink, so we must use
+        // bash-style single-quote escaping. Windows' escapeshellarg() wraps in
+        // double-quotes which causes bash to interpret $, !, ` inside passwords,
+        // and can even strip characters like '!' entirely.
         $remoteDump = sprintf(
             'mysqldump -u %s -p%s %s',
-            escapeshellarg((string) $remote->db_user),
-            escapeshellarg((string) $remote->db_password),
-            escapeshellarg((string) $remote->db_name),
+            $this->bashEscape((string) $remote->db_user),
+            $this->bashEscape((string) $remote->db_password),
+            $this->bashEscape((string) $remote->db_name),
         );
 
         $this->line("[Lando Studio] Connecting to {$target} via plink...");
@@ -70,18 +73,21 @@ class MysqldumpSshCommand extends Command
             $plinkPath,
             '-batch',
             '-pw', (string) $remote->ssh_password,
-            '-oStrictHostKeyChecking=no',
-            '-oServerAliveInterval=60',
-            '-oServerAliveCountMax=6',
             '-T',
             $target,
             $remoteDump,
         ];
 
+        // On Windows, stream_set_blocking(false) silently fails on proc_open pipes,
+        // causing fread() to block indefinitely. Instead, write plink's stdout directly
+        // to the SQL file via a file descriptor, and capture stderr in a temp file.
+        // We poll file size growth for heartbeats and proc_get_status for completion.
+        $stderrPath = $sqlPath.'.stderr';
+
         $descriptors = [
-            0 => ['pipe', 'r'],  // stdin  (closed immediately)
-            1 => ['pipe', 'r'],  // stdout → raw SQL data written to disk
-            2 => ['pipe', 'r'],  // stderr → forwarded to our stdout (goes to log)
+            0 => ['pipe', 'r'],               // stdin  (child reads — closed immediately)
+            1 => ['file', $sqlPath, 'w'],      // stdout → SQL data written directly to disk
+            2 => ['file', $stderrPath, 'w'],   // stderr → captured for error reporting
         ];
 
         $proc = proc_open($cmd, $descriptors, $pipes);
@@ -91,61 +97,43 @@ class MysqldumpSshCommand extends Command
             return self::FAILURE;
         }
 
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-        fclose($pipes[0]);
-
-        $outFile = fopen($sqlPath, 'wb');
-        if (! $outFile) {
-            proc_close($proc);
-            $this->error("[Lando Studio ERROR] Cannot write to {$sqlPath}");
-
-            return self::FAILURE;
-        }
+        fclose($pipes[0]); // close stdin
 
         $lastHeartbeat = time();
-        $bytesReceived = 0;
+        $lastSize = 0;
 
         while (true) {
             $status = proc_get_status($proc);
 
-            $data = fread($pipes[1], 65536);
-            if ($data !== false && $data !== '') {
-                fwrite($outFile, $data);
-                $bytesReceived += strlen($data);
-            }
-
-            $err = fread($pipes[2], 4096);
-            if ($err !== false && $err !== '') {
-                // Forward plink stderr to our stdout so it appears in the step log
-                $this->line('[plink] '.rtrim($err));
-            }
-
-            if (time() - $lastHeartbeat >= 20) {
-                $mb = round($bytesReceived / 1_048_576, 1);
-                $this->line('[Lando Studio] Database dump in progress '.date('H:i:s')." ({$mb} MB received)");
-                $lastHeartbeat = time();
-            }
-
             if (! $status['running']) {
-                // Drain any remaining buffered output after process exit
-                while (! feof($pipes[1])) {
-                    $data = fread($pipes[1], 65536);
-                    if ($data !== false && $data !== '') {
-                        fwrite($outFile, $data);
-                        $bytesReceived += strlen($data);
-                    }
-                }
                 break;
             }
 
-            usleep(100_000); // 100 ms poll interval
+            if (time() - $lastHeartbeat >= 20) {
+                clearstatcache(true, $sqlPath);
+                $currentSize = file_exists($sqlPath) ? (int) filesize($sqlPath) : 0;
+                $mb = round($currentSize / 1_048_576, 1);
+                $this->line('[Lando Studio] Database dump in progress '.date('H:i:s')." ({$mb} MB received)");
+                $lastHeartbeat = time();
+                $lastSize = $currentSize;
+            }
+
+            usleep(500_000); // 500 ms poll interval
         }
 
-        fclose($outFile);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
         $exitCode = proc_close($proc);
+
+        // Report any stderr from plink/mysqldump
+        if (file_exists($stderrPath)) {
+            $stderr = trim((string) file_get_contents($stderrPath));
+            if ($stderr !== '') {
+                $this->line('[plink] '.$stderr);
+            }
+            @unlink($stderrPath);
+        }
+
+        clearstatcache(true, $sqlPath);
+        $bytesReceived = file_exists($sqlPath) ? (int) filesize($sqlPath) : 0;
 
         if ($exitCode !== 0) {
             @unlink($sqlPath);
@@ -179,5 +167,16 @@ class MysqldumpSshCommand extends Command
         $this->line("[Lando Studio] Dump compressed: {$sizeMb} MB → {$outputPath}");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Escape a string for use inside a bash command line using single quotes.
+     * This is needed because the remote command runs on Linux via plink, and
+     * PHP's escapeshellarg() on Windows uses double-quotes which allow bash
+     * to interpret $, !, ` and other metacharacters.
+     */
+    private function bashEscape(string $value): string
+    {
+        return "'".str_replace("'", "'\\''", $value)."'";
     }
 }

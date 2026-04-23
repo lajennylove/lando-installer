@@ -26,6 +26,7 @@ final class CommandLogErrorDetector
             'Error: The site you have requested is not installed',
             'Dump file is too small or empty',
             'mysqldump may have failed',
+            '[Lando Studio ERROR]',
         ];
 
         foreach ($fatalPatterns as $pattern) {

@@ -67,15 +67,30 @@ class PlatformDetector
         if (is_string($persisted) && trim($persisted) !== '') {
             $expanded = str_replace('~', $this->homeDir(), $persisted);
 
-            return rtrim($expanded, DIRECTORY_SEPARATOR);
+            return $this->normalizePathSeparators($expanded);
         }
 
         $configured = config('lando_dev.defaults.code_path');
         if ($configured) {
-            return rtrim($configured, DIRECTORY_SEPARATOR);
+            return $this->normalizePathSeparators($configured);
         }
 
         return $this->homeDir().DIRECTORY_SEPARATOR.'code'.DIRECTORY_SEPARATOR.'sites';
+    }
+
+    /**
+     * Normalize directory separators and strip trailing slashes.
+     * On Windows, converts all forward slashes to backslashes so paths
+     * stored with mixed separators (e.g. from user input or settings JSON)
+     * are safe to use with Set-Location and file system APIs.
+     */
+    public function normalizePathSeparators(string $path): string
+    {
+        if ($this->isWindows()) {
+            return rtrim(str_replace('/', '\\', $path), '\\');
+        }
+
+        return rtrim($path, '/');
     }
 
     public function shellWrapper(): string
@@ -124,21 +139,27 @@ class PlatformDetector
     /**
      * Wrap a shell command so step logging does not steal stdout from inner redirects/pipes.
      *
-     * On Unix:  (command) > 'logfile' 2>&1
-     * On Windows (PowerShell): & { command } *> 'logfile'
+     * On Unix:  (command) > 'logfile' 2>&1; echo '[LANDO_STEP_DONE]' >> 'logfile'
+     * On Windows (PowerShell): & { command } *> 'logfile'; Add-Content -Path 'logfile' -Value '[LANDO_STEP_DONE]'
      *   *> captures all PS streams (stdout, stderr, verbose, warning…)
      *   Single-quoted path is a PS literal string — safe for any Windows path.
+     *   The completion marker lets pollers detect process exit without relying
+     *   solely on log-file inactivity (which races with the overall timeout).
      */
+    public const STEP_DONE_MARKER = '[LANDO_STEP_DONE]';
+
     public function wrapCommandWithLogRedirect(string $command, string $logFile): string
     {
+        $marker = self::STEP_DONE_MARKER;
+
         if ($this->isWindows()) {
             $log = str_replace("'", "''", $logFile); // escape PS single-quoted string
 
-            return $this->powershellUtf8Prefix()."& { {$command} } *> '{$log}'";
+            return $this->powershellUtf8Prefix()."& { {$command} } *> '{$log}'; Add-Content -Path '{$log}' -Value '{$marker}'";
         }
 
         $log = escapeshellarg($logFile);
 
-        return '('.$command.') > '.$log.' 2>&1';
+        return '('.$command.') > '.$log.' 2>&1; echo '.escapeshellarg($marker).' >> '.$log;
     }
 }

@@ -254,7 +254,11 @@ class SiteDashboard extends Component
         $manager = app(SiteManager::class);
         $destroyCmd = $manager->destroySite($this->site);
         $deleteCmd = $manager->getDeletePath($this->site);
-        $combined = "{$destroyCmd} && {$deleteCmd}";
+
+        // PS5 doesn't support &&; use ; which always runs both commands.
+        $platform = app(PlatformDetector::class);
+        $separator = $platform->isWindows() ? '; ' : ' && ';
+        $combined = "{$destroyCmd}{$separator}{$deleteCmd}";
 
         $this->runDestroyAction($combined);
     }
@@ -281,8 +285,12 @@ class SiteDashboard extends Component
 
         $wrapped = $platform->wrapCommandWithLogRedirect($shellCommand, $logFile);
 
+        $cmd = $platform->isWindows()
+            ? [...$platform->powershellArgs(), $wrapped]
+            : [$platform->shellWrapper(), $platform->shellFlag(), $wrapped];
+
         ChildProcess::start(
-            cmd: [$platform->shellWrapper(), $platform->shellFlag(), $wrapped],
+            cmd: $cmd,
             alias: 'destroy-site-'.$this->site->id.'-'.uniqid(),
         );
     }
@@ -313,13 +321,19 @@ class SiteDashboard extends Component
             return;
         }
 
-        $path = $this->site->path.DIRECTORY_SEPARATOR.'wp';
         $platform = app(PlatformDetector::class);
+        $base = $platform->normalizePathSeparators($this->site->path);
+        $path = $base.DIRECTORY_SEPARATOR.'wp';
+
+        // If the wp subfolder doesn't exist yet, open the site root instead.
+        if (! is_dir($path)) {
+            $path = $base;
+        }
 
         $cmd = match ($platform->os()) {
-            'macos' => "open '{$path}'",
+            'macos' => "open '".str_replace("'", "'\\''", $path)."'",
             'windows' => "explorer \"{$path}\"",
-            default => "xdg-open '{$path}'",
+            default => "xdg-open '".str_replace("'", "'\\''", $path)."'",
         };
 
         ChildProcess::start(
@@ -479,11 +493,18 @@ class SiteDashboard extends Component
             return;
         }
 
-        $content = LogContentUtf8::forLivewire((string) file_get_contents($logFile));
+        $rawContent = LogContentUtf8::forLivewire((string) file_get_contents($logFile));
+        $marker = PlatformDetector::STEP_DONE_MARKER;
+        $hasMarker = str_contains($rawContent, $marker);
+        $content = str_replace($marker, '', $rawContent);
         $this->actionOutput = $content;
         $this->dispatch('landodev-scroll-terminal');
 
-        if ($elapsed > 600) {
+        // ── 1. Completion marker — process definitely exited ────────────────
+        $actionDone = $hasMarker;
+
+        // ── 2. Overall timeout — only if marker not found ───────────────────
+        if (! $actionDone && $elapsed > 600) {
             $this->actionRunning = false;
             $this->actionLabel = '';
             $this->actionStartedAt = null;
@@ -492,8 +513,13 @@ class SiteDashboard extends Component
             return;
         }
 
-        $lastModified = filemtime($logFile);
-        if ((time() - $lastModified) > 30) {
+        // ── 3. Inactivity fallback — marker not written (crash/kill) ────────
+        if (! $actionDone) {
+            $lastModified = filemtime($logFile);
+            $actionDone = (time() - $lastModified) > 30;
+        }
+
+        if ($actionDone) {
             if ($this->actionLabel === 'Destroying') {
                 if ($this->destroyLogHasFatalError($content)) {
                     $this->actionRunning = false;
