@@ -125,6 +125,15 @@ class DependencyChecker
         return null;
     }
 
+    /**
+     * Whether winget (Windows Package Manager) is available.
+     * Some Windows builds (LTSC, stripped images, older 10 builds) don't ship it.
+     */
+    public function isWingetInstalled(): bool
+    {
+        return $this->platform->isWindows() && $this->commandExists('winget');
+    }
+
     public function getLandoVersion(): ?string
     {
         // On Windows use the full path in case the child process PATH is frozen.
